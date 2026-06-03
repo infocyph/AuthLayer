@@ -1,0 +1,13 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Infocyph\AuthLayer\Mfa;
+
+enum MfaChallengePurpose: string
+{
+    case LOGIN = 'login';
+    case STEP_UP = 'step_up';
+    case ENROLLMENT = 'enrollment';
+    case FACTOR_REMOVAL = 'factor_removal';
+}

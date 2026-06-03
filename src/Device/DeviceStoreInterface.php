@@ -1,0 +1,23 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Infocyph\AuthLayer\Device;
+
+interface DeviceStoreInterface
+{
+    public function save(DeviceRecord $device): void;
+
+    public function find(string $deviceId): ?DeviceRecord;
+
+    /**
+     * @return list<DeviceRecord>
+     */
+    public function findForAccount(string $accountId): array;
+
+    public function markTrusted(string $deviceId, bool $trusted): void;
+
+    public function touch(string $deviceId, int $lastSeenAt): void;
+
+    public function revoke(string $deviceId): void;
+}

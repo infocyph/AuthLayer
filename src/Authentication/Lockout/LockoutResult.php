@@ -1,0 +1,24 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Infocyph\AuthLayer\Authentication\Lockout;
+
+use Infocyph\AuthLayer\Contract\Storage\LockoutReason;
+
+final readonly class LockoutResult
+{
+    /**
+     * @param array<string, mixed> $context
+     */
+    public function __construct(
+        public LockoutStatus $status,
+        public string $accountId,
+        public ?LockoutReason $reason = null,
+        public ?int $lockedUntil = null,
+        public ?int $attempts = null,
+        public ?string $code = null,
+        public array $context = [],
+    ) {
+    }
+}

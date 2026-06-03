@@ -1,0 +1,56 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Infocyph\AuthLayer\Authorization\Permission;
+
+use Infocyph\AuthLayer\Contract\Id\AuthIdGeneratorInterface;
+
+final readonly class PermissionManager
+{
+    public function __construct(
+        private PermissionStoreInterface $permissions,
+        private PermissionAssignmentStoreInterface $assignments,
+        private AuthIdGeneratorInterface $ids,
+    ) {
+    }
+
+    /**
+     * @param array<string, mixed> $metadata
+     */
+    public function create(string $name, array $metadata = []): Permission
+    {
+        $permission = new Permission($this->ids->permissionId(), $name, $metadata);
+        $this->assignments->save($permission);
+
+        return $permission;
+    }
+
+    public function assignToAccount(string $accountId, string $permissionId): void
+    {
+        $this->assignments->assignPermissionToAccount($accountId, $permissionId);
+    }
+
+    public function revokeFromAccount(string $accountId, string $permissionId): void
+    {
+        $this->assignments->revokePermissionFromAccount($accountId, $permissionId);
+    }
+
+    public function assignToRole(string $roleId, string $permissionId): void
+    {
+        $this->assignments->assignPermissionToRole($roleId, $permissionId);
+    }
+
+    public function revokeFromRole(string $roleId, string $permissionId): void
+    {
+        $this->assignments->revokePermissionFromRole($roleId, $permissionId);
+    }
+
+    /**
+     * @return list<Permission>
+     */
+    public function forAccount(string $accountId): array
+    {
+        return $this->permissions->permissionsForAccount($accountId);
+    }
+}

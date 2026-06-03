@@ -1,0 +1,62 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Infocyph\AuthLayer\Authentication\StepUp;
+
+use Infocyph\AuthLayer\Authentication\Session\AuthSession;
+use Infocyph\AuthLayer\Contract\Cache\TtlStoreInterface;
+use Infocyph\AuthLayer\Contract\Clock\ClockInterface;
+use Infocyph\AuthLayer\Support\SystemClock;
+
+final readonly class StepUpManager
+{
+    public function __construct(
+        private TtlStoreInterface $ttl,
+        private ClockInterface $clock = new SystemClock(),
+    ) {
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    public function evaluate(AuthSession $session, string $ability, array $context = []): StepUpResult
+    {
+        $method = $context['method'] ?? StepUpMethod::RECENT_AUTH;
+
+        if (! $method instanceof StepUpMethod) {
+            $method = StepUpMethod::tryFrom((string) $method) ?? StepUpMethod::RECENT_AUTH;
+        }
+
+        $requirement = new StepUpRequirement(
+            ability: $ability,
+            maxAgeSeconds: $context['max_age_seconds'] ?? 900,
+            method: $method,
+        );
+
+        $satisfiedAt = $this->ttl->get($this->key($session->accountId, $session->id, $ability));
+
+        if (is_int($satisfiedAt) && $satisfiedAt >= ($this->clock->now() - $requirement->maxAgeSeconds)) {
+            return new StepUpResult(false, $requirement, $satisfiedAt, 'step_up_already_satisfied', $context);
+        }
+
+        $required = $session->recentAuthAt === null || $session->recentAuthAt < ($this->clock->now() - $requirement->maxAgeSeconds);
+
+        return new StepUpResult($required, $requirement, $satisfiedAt, $required ? 'step_up_required' : 'step_up_not_required', $context);
+    }
+
+    public function requiresStepUp(AuthSession $session, string $ability, array $context = []): bool
+    {
+        return $this->evaluate($session, $ability, $context)->required;
+    }
+
+    public function markSatisfied(string $accountId, string $sessionId, string $ability, StepUpMethod $method = StepUpMethod::RECENT_AUTH, int $ttlSeconds = 900): void
+    {
+        $this->ttl->put($this->key($accountId, $sessionId, $ability), $this->clock->now(), $ttlSeconds);
+    }
+
+    private function key(string $accountId, string $sessionId, string $ability): string
+    {
+        return sprintf('step-up:%s:%s:%s', $accountId, $sessionId, $ability);
+    }
+}
