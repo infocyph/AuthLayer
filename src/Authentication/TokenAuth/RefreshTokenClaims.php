@@ -18,6 +18,5 @@ final readonly class RefreshTokenClaims
         public int $issuedAt,
         public int $expiresAt,
         public array $metadata = [],
-    ) {
-    }
+    ) {}
 }

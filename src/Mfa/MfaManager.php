@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Mfa;
 
-use Infocyph\AuthLayer\Audit\AuthEvent;
 use Infocyph\AuthLayer\Audit\AuthEventSeverity;
 use Infocyph\AuthLayer\Audit\AuthEventType;
 use Infocyph\AuthLayer\Contract\Cache\TtlStoreInterface;
@@ -14,6 +13,8 @@ use Infocyph\AuthLayer\Contract\Notification\AuthNotifierInterface;
 use Infocyph\AuthLayer\Contract\Storage\AuditEventStoreInterface;
 use Infocyph\AuthLayer\Notification\AuthNotification;
 use Infocyph\AuthLayer\Notification\AuthNotificationType;
+use Infocyph\AuthLayer\Support\AuthEventRecorder;
+use Infocyph\AuthLayer\Support\ContextValue;
 use Infocyph\AuthLayer\Support\SystemClock;
 
 final readonly class MfaManager
@@ -29,7 +30,23 @@ final readonly class MfaManager
         private int $challengeTtlSeconds = 300,
         private int $satisfiedTtlSeconds = 900,
         private ClockInterface $clock = new SystemClock(),
-    ) {
+    ) {}
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    public function activateFactor(string $accountId, string $factorId, array $context = []): MfaEnrollmentResult
+    {
+        $factor = $this->findFactor($accountId, $factorId);
+
+        if ($factor === null) {
+            return new MfaEnrollmentResult(MfaStatus::INVALID, code: 'mfa_factor_not_found', context: $context);
+        }
+
+        $enabledFactor = $factor->activated();
+        $this->factors->save($enabledFactor);
+
+        return new MfaEnrollmentResult(MfaStatus::ACTIVATED, $enabledFactor, code: 'mfa_factor_activated', context: $context);
     }
 
     /**
@@ -54,21 +71,9 @@ final readonly class MfaManager
         return new MfaEnrollmentResult(MfaStatus::ENROLLED, $factor, $recoveryCodes, 'mfa_factor_enrolled', $metadata);
     }
 
-    /**
-     * @param array<string, mixed> $context
-     */
-    public function activateFactor(string $accountId, string $factorId, array $context = []): MfaEnrollmentResult
+    public function isSatisfied(string $accountId, ?string $sessionId = null): bool
     {
-        $factor = $this->findFactor($accountId, $factorId);
-
-        if ($factor === null) {
-            return new MfaEnrollmentResult(MfaStatus::INVALID, code: 'mfa_factor_not_found', context: $context);
-        }
-
-        $enabledFactor = $factor->activated();
-        $this->factors->save($enabledFactor);
-
-        return new MfaEnrollmentResult(MfaStatus::ACTIVATED, $enabledFactor, code: 'mfa_factor_activated', context: $context);
+        return (bool) $this->ttl->get($this->satisfiedKey($accountId, $sessionId), false);
     }
 
     /**
@@ -107,52 +112,6 @@ final readonly class MfaManager
     /**
      * @param array<string, mixed> $context
      */
-    public function verifyChallenge(string $challengeId, string $code, array $context = []): MfaChallengeResult
-    {
-        $challenge = $this->ttl->get($this->challengeKey($challengeId));
-
-        if (! $challenge instanceof MfaChallenge) {
-            return new MfaChallengeResult(MfaStatus::INVALID, code: 'mfa_challenge_not_found', context: $context);
-        }
-
-        if ($challenge->isExpiredAt($this->clock->now())) {
-            $this->ttl->delete($this->challengeKey($challengeId));
-
-            return new MfaChallengeResult(MfaStatus::EXPIRED, $challenge, code: 'mfa_challenge_expired', context: $context);
-        }
-
-        $verification = $this->verifier->verify($challenge, $code);
-
-        if (! $verification->verified) {
-            return new MfaChallengeResult(MfaStatus::INVALID, $challenge, $verification, code: $verification->reason ?? 'mfa_code_invalid', context: $context);
-        }
-
-        $this->ttl->delete($this->challengeKey($challengeId));
-        $this->markSatisfied($challenge->accountId, $context['session_id'] ?? null);
-
-        return new MfaChallengeResult(MfaStatus::VERIFIED, $challenge, $verification, $challenge->factorId !== null ? $this->findFactor($challenge->accountId, $challenge->factorId) : null, 'mfa_verified', $context);
-    }
-
-    /**
-     * @param array<string, mixed> $context
-     */
-    public function verifyRecoveryCode(string $accountId, string $code, array $context = []): MfaChallengeResult
-    {
-        $verification = $this->recoveryCodes->verify($accountId, $code);
-
-        if (! $verification->verified) {
-            return new MfaChallengeResult(MfaStatus::INVALID, code: $verification->reason ?? 'recovery_code_invalid', context: $context);
-        }
-
-        $this->markSatisfied($accountId, $context['session_id'] ?? null);
-        $this->record(AuthEventType::RECOVERY_CODE_USED, $accountId, $context, AuthEventSeverity::WARNING);
-
-        return new MfaChallengeResult(MfaStatus::RECOVERY_CODE_VERIFIED, verification: new MfaVerificationResult(true, recoveryCodeUsed: true, context: $context), code: 'recovery_code_verified', context: $context);
-    }
-
-    /**
-     * @param array<string, mixed> $context
-     */
     public function removeFactor(string $accountId, string $factorId, array $context = []): MfaEnrollmentResult
     {
         $factor = $this->findFactor($accountId, $factorId);
@@ -167,35 +126,55 @@ final readonly class MfaManager
         return new MfaEnrollmentResult(MfaStatus::REMOVED, $factor, code: 'mfa_factor_removed', context: $context);
     }
 
-    public function isSatisfied(string $accountId, ?string $sessionId = null): bool
+    /**
+     * @param array<string, mixed> $context
+     */
+    public function verifyChallenge(string $challengeId, string $code, array $context = []): MfaChallengeResult
     {
-        return (bool) $this->ttl->get($this->satisfiedKey($accountId, $sessionId), false);
+        $challenge = $this->ttl->get($this->challengeKey($challengeId));
+
+        if (!$challenge instanceof MfaChallenge) {
+            return new MfaChallengeResult(MfaStatus::INVALID, code: 'mfa_challenge_not_found', context: $context);
+        }
+
+        if ($challenge->isExpiredAt($this->clock->now())) {
+            $this->ttl->delete($this->challengeKey($challengeId));
+
+            return new MfaChallengeResult(MfaStatus::EXPIRED, $challenge, code: 'mfa_challenge_expired', context: $context);
+        }
+
+        $verification = $this->verifier->verify($challenge, $code);
+
+        if (!$verification->verified) {
+            return new MfaChallengeResult(MfaStatus::INVALID, $challenge, $verification, code: $verification->reason ?? 'mfa_code_invalid', context: $context);
+        }
+
+        $this->ttl->delete($this->challengeKey($challengeId));
+        $this->markSatisfied($challenge->accountId, ContextValue::stringOrNull($context, 'session_id'));
+
+        return new MfaChallengeResult(MfaStatus::VERIFIED, $challenge, $verification, $challenge->factorId !== null ? $this->findFactor($challenge->accountId, $challenge->factorId) : null, 'mfa_verified', $context);
     }
 
-    private function markSatisfied(string $accountId, ?string $sessionId): void
+    /**
+     * @param array<string, mixed> $context
+     */
+    public function verifyRecoveryCode(string $accountId, string $code, array $context = []): MfaChallengeResult
     {
-        $this->ttl->put($this->satisfiedKey($accountId, $sessionId), true, $this->satisfiedTtlSeconds);
+        $verification = $this->recoveryCodes->verify($accountId, $code);
+
+        if (!$verification->verified) {
+            return new MfaChallengeResult(MfaStatus::INVALID, code: $verification->reason ?? 'recovery_code_invalid', context: $context);
+        }
+
+        $this->markSatisfied($accountId, ContextValue::stringOrNull($context, 'session_id'));
+        $this->record(AuthEventType::RECOVERY_CODE_USED, $accountId, $context, AuthEventSeverity::WARNING);
+
+        return new MfaChallengeResult(MfaStatus::RECOVERY_CODE_VERIFIED, verification: new MfaVerificationResult(true, recoveryCodeUsed: true, context: $context), code: 'recovery_code_verified', context: $context);
     }
 
     private function challengeKey(string $challengeId): string
     {
         return 'mfa:challenge:' . $challengeId;
-    }
-
-    private function satisfiedKey(string $accountId, ?string $sessionId): string
-    {
-        return 'mfa:satisfied:' . $accountId . ':' . ($sessionId ?? 'global');
-    }
-
-    private function firstEnabledFactor(string $accountId): ?MfaFactor
-    {
-        foreach ($this->factors->findForAccount($accountId) as $factor) {
-            if ($factor->enabled) {
-                return $factor;
-            }
-        }
-
-        return null;
     }
 
     private function findFactor(string $accountId, string $factorId): ?MfaFactor
@@ -209,19 +188,42 @@ final readonly class MfaManager
         return null;
     }
 
+    private function firstEnabledFactor(string $accountId): ?MfaFactor
+    {
+        foreach ($this->factors->findForAccount($accountId) as $factor) {
+            if ($factor->enabled) {
+                return $factor;
+            }
+        }
+
+        return null;
+    }
+
+    private function markSatisfied(string $accountId, ?string $sessionId): void
+    {
+        $this->ttl->put($this->satisfiedKey($accountId, $sessionId), true, $this->satisfiedTtlSeconds);
+    }
+
+    /**
+     * @param array<string, mixed> $metadata
+     */
     private function record(AuthEventType $type, string $accountId, array $metadata = [], AuthEventSeverity $severity = AuthEventSeverity::INFO): void
     {
-        $this->audit->record(new AuthEvent(
-            id: $this->ids->auditEventId(),
-            type: $type,
-            severity: $severity,
-            accountId: $accountId,
-            actorId: $accountId,
-            sessionId: $metadata['session_id'] ?? null,
-            deviceId: $metadata['device_id'] ?? null,
-            correlationId: $this->ids->correlationId(),
-            occurredAt: $this->clock->now(),
+        AuthEventRecorder::record(
+            $this->audit,
+            $this->ids,
+            $this->clock,
+            $type,
+            $accountId,
             metadata: $metadata,
-        ));
+            severity: $severity,
+            sessionId: ContextValue::stringOrNull($metadata, 'session_id'),
+            deviceId: ContextValue::stringOrNull($metadata, 'device_id'),
+        );
+    }
+
+    private function satisfiedKey(string $accountId, ?string $sessionId): string
+    {
+        return 'mfa:satisfied:' . $accountId . ':' . ($sessionId ?? 'global');
     }
 }

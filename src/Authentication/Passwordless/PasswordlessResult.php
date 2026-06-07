@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Infocyph\AuthLayer\Authentication\Passwordless;
 
 use Infocyph\AuthLayer\Contract\Security\TokenVerificationResult;
+use Infocyph\AuthLayer\Support\HasEnumStatusResult;
 
 final readonly class PasswordlessResult
 {
+    use HasEnumStatusResult;
+
     /**
      * @param array<string, mixed> $context
      */
@@ -17,6 +20,13 @@ final readonly class PasswordlessResult
         public ?TokenVerificationResult $verification = null,
         public ?string $code = null,
         public array $context = [],
-    ) {
+    ) {}
+
+    /**
+     * @return list<object>
+     */
+    protected function successStatuses(): array
+    {
+        return [PasswordlessStatus::ISSUED, PasswordlessStatus::VERIFIED];
     }
 }

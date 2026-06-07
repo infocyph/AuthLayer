@@ -14,8 +14,7 @@ final readonly class AuthorizationDecision
         public string $code,
         public ?string $reason = null,
         public array $context = [],
-    ) {
-    }
+    ) {}
 
     /**
      * @param array<string, mixed> $context

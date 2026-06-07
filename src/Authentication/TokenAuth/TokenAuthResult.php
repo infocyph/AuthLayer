@@ -18,6 +18,19 @@ final readonly class TokenAuthResult
         public ?TokenVerificationResult $verification = null,
         public ?string $code = null,
         public array $context = [],
-    ) {
+    ) {}
+
+    public function failed(): bool
+    {
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        if ($this->verification !== null) {
+            return $this->verification->verified;
+        }
+
+        return $this->token !== null;
     }
 }

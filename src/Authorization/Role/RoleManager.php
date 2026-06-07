@@ -12,7 +12,11 @@ final readonly class RoleManager
         private RoleStoreInterface $roles,
         private RoleAssignmentStoreInterface $assignments,
         private AuthIdGeneratorInterface $ids,
-    ) {
+    ) {}
+
+    public function assign(string $accountId, string $roleId): void
+    {
+        $this->assignments->assignRole($accountId, $roleId);
     }
 
     /**
@@ -26,21 +30,16 @@ final readonly class RoleManager
         return $role;
     }
 
-    public function assign(string $accountId, string $roleId): void
-    {
-        $this->assignments->assignRole($accountId, $roleId);
-    }
-
-    public function revoke(string $accountId, string $roleId): void
-    {
-        $this->assignments->revokeRole($accountId, $roleId);
-    }
-
     /**
      * @return list<Role>
      */
     public function forAccount(string $accountId): array
     {
         return $this->roles->rolesForAccount($accountId);
+    }
+
+    public function revoke(string $accountId, string $roleId): void
+    {
+        $this->assignments->revokeRole($accountId, $roleId);
     }
 }

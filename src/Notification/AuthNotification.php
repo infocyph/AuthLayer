@@ -13,6 +13,5 @@ final readonly class AuthNotification
         public AuthNotificationType $type,
         public ?string $accountId,
         public array $payload = [],
-    ) {
-    }
+    ) {}
 }

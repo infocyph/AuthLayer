@@ -14,6 +14,5 @@ final readonly class AuthScope
         public ?string $workspaceId = null,
         public ?string $organizationId = null,
         public array $metadata = [],
-    ) {
-    }
+    ) {}
 }

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Authentication\EmailVerification;
 
-final readonly class EmailVerificationResult
+use Infocyph\AuthLayer\Support\AbstractTokenStringResult;
+
+final readonly class EmailVerificationResult extends AbstractTokenStringResult
 {
     /**
      * @param array<string, mixed> $context
@@ -12,10 +14,27 @@ final readonly class EmailVerificationResult
     public function __construct(
         public EmailVerificationStatus $status,
         public ?EmailVerificationRequest $request = null,
-        public ?string $token = null,
-        public ?string $code = null,
-        public array $context = [],
+        ?string $token = null,
+        ?string $code = null,
+        array $context = [],
     ) {
+        parent::__construct($token, $code, $context);
+    }
+
+    public function email(): ?string
+    {
+        return $this->request?->email;
+    }
+
+    public function failed(): bool
+    {
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        return $this->status === EmailVerificationStatus::ISSUED
+            || $this->status === EmailVerificationStatus::VERIFIED;
     }
 
     public function verified(): bool

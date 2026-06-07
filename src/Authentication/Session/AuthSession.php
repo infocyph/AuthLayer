@@ -18,8 +18,7 @@ final readonly class AuthSession
         public int $expiresAt,
         public ?int $recentAuthAt = null,
         public array $metadata = [],
-    ) {
-    }
+    ) {}
 
     public function isExpiredAt(?int $timestamp = null): bool
     {

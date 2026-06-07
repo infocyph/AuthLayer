@@ -8,8 +8,7 @@ final readonly class PermissionResolver
 {
     public function __construct(
         private PermissionStoreInterface $permissions,
-    ) {
-    }
+    ) {}
 
     /**
      * @return list<Permission>

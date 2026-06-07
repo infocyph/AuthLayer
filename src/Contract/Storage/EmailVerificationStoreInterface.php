@@ -8,9 +8,9 @@ use Infocyph\AuthLayer\Authentication\EmailVerification\EmailVerificationRequest
 
 interface EmailVerificationStoreInterface
 {
-    public function save(EmailVerificationRequest $request): void;
+    public function consume(string $requestId): void;
 
     public function find(string $requestId): ?EmailVerificationRequest;
 
-    public function consume(string $requestId): void;
+    public function save(EmailVerificationRequest $request): void;
 }

@@ -6,8 +6,6 @@ namespace Infocyph\AuthLayer\Passkey;
 
 interface PasskeyCredentialStoreInterface
 {
-    public function save(PasskeyCredential $credential): void;
-
     public function findByCredentialId(string $credentialId): ?PasskeyCredential;
 
     /**
@@ -15,7 +13,9 @@ interface PasskeyCredentialStoreInterface
      */
     public function findForAccount(string $accountId): array;
 
-    public function updateSignCount(string $credentialId, int $signCount): void;
-
     public function revoke(string $credentialId): void;
+
+    public function save(PasskeyCredential $credential): void;
+
+    public function updateUsage(string $credentialId, int $signCount, int $usedAt): void;
 }

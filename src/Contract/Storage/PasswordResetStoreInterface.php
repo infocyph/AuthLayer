@@ -8,11 +8,11 @@ use Infocyph\AuthLayer\Authentication\PasswordReset\PasswordResetRequest;
 
 interface PasswordResetStoreInterface
 {
-    public function save(PasswordResetRequest $request): void;
+    public function consume(string $requestId): void;
 
     public function find(string $requestId): ?PasswordResetRequest;
 
-    public function consume(string $requestId): void;
+    public function save(PasswordResetRequest $request): void;
 
     public function wasConsumed(string $requestId): bool;
 }

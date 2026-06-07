@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Infocyph\AuthLayer\Authentication\Impersonation;
 
 use Infocyph\AuthLayer\Account\AccountInterface;
-use Infocyph\AuthLayer\Audit\AuthEvent;
 use Infocyph\AuthLayer\Audit\AuthEventSeverity;
 use Infocyph\AuthLayer\Audit\AuthEventType;
 use Infocyph\AuthLayer\Contract\Clock\ClockInterface;
@@ -14,6 +13,8 @@ use Infocyph\AuthLayer\Contract\Storage\AuditEventStoreInterface;
 use Infocyph\AuthLayer\Principal\Principal;
 use Infocyph\AuthLayer\Principal\PrincipalInterface;
 use Infocyph\AuthLayer\Principal\PrincipalType;
+use Infocyph\AuthLayer\Support\AuthEventRecorder;
+use Infocyph\AuthLayer\Support\ContextValue;
 use Infocyph\AuthLayer\Support\SystemClock;
 
 final readonly class ImpersonationManager
@@ -22,8 +23,7 @@ final readonly class ImpersonationManager
         private AuditEventStoreInterface $audit,
         private AuthIdGeneratorInterface $ids,
         private ClockInterface $clock = new SystemClock(),
-    ) {
-    }
+    ) {}
 
     /**
      * @param array<string, mixed> $context
@@ -65,17 +65,17 @@ final readonly class ImpersonationManager
      */
     private function record(AuthEventType $type, string $accountId, string $actorId, array $metadata): void
     {
-        $this->audit->record(new AuthEvent(
-            id: $this->ids->auditEventId(),
-            type: $type,
-            severity: AuthEventSeverity::NOTICE,
-            accountId: $accountId,
+        AuthEventRecorder::record(
+            $this->audit,
+            $this->ids,
+            $this->clock,
+            $type,
+            $accountId,
             actorId: $actorId,
-            sessionId: $metadata['session_id'] ?? null,
-            deviceId: $metadata['device_id'] ?? null,
-            correlationId: $this->ids->correlationId(),
-            occurredAt: $this->clock->now(),
             metadata: $metadata,
-        ));
+            severity: AuthEventSeverity::NOTICE,
+            sessionId: ContextValue::stringOrNull($metadata, 'session_id'),
+            deviceId: ContextValue::stringOrNull($metadata, 'device_id'),
+        );
     }
 }

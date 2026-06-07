@@ -19,20 +19,24 @@ final readonly class DeviceRecord
         public ?int $lastSeenAt = null,
         public ?int $revokedAt = null,
         public array $metadata = [],
-    ) {
+    ) {}
+
+    public function isRevoked(): bool
+    {
+        return $this->revokedAt !== null;
     }
 
-    public function trusted(): self
+    public function revokedAt(int $timestamp): self
     {
         return new self(
             id: $this->id,
             accountId: $this->accountId,
             label: $this->label,
             fingerprint: $this->fingerprint,
-            trusted: true,
+            trusted: false,
             createdAt: $this->createdAt,
             lastSeenAt: $this->lastSeenAt,
-            revokedAt: $this->revokedAt,
+            revokedAt: $timestamp,
             metadata: $this->metadata,
         );
     }
@@ -52,17 +56,17 @@ final readonly class DeviceRecord
         );
     }
 
-    public function revokedAt(int $timestamp): self
+    public function trusted(): self
     {
         return new self(
             id: $this->id,
             accountId: $this->accountId,
             label: $this->label,
             fingerprint: $this->fingerprint,
-            trusted: false,
+            trusted: true,
             createdAt: $this->createdAt,
             lastSeenAt: $this->lastSeenAt,
-            revokedAt: $timestamp,
+            revokedAt: $this->revokedAt,
             metadata: $this->metadata,
         );
     }

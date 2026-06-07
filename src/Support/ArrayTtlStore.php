@@ -16,15 +16,11 @@ final class ArrayTtlStore implements TtlStoreInterface
 
     public function __construct(
         private readonly ClockInterface $clock = new SystemClock(),
-    ) {
-    }
+    ) {}
 
-    public function put(string $key, mixed $value, int $ttlSeconds): void
+    public function delete(string $key): void
     {
-        $this->items[$key] = [
-            'value' => $value,
-            'expires_at' => $this->clock->now() + $ttlSeconds,
-        ];
+        unset($this->items[$key]);
     }
 
     public function get(string $key, mixed $default = null): mixed
@@ -46,9 +42,12 @@ final class ArrayTtlStore implements TtlStoreInterface
         return $value;
     }
 
-    public function delete(string $key): void
+    public function put(string $key, mixed $value, int $ttlSeconds): void
     {
-        unset($this->items[$key]);
+        $this->items[$key] = [
+            'value' => $value,
+            'expires_at' => $this->clock->now() + $ttlSeconds,
+        ];
     }
 
     private function expired(string $key, int $expiresAt): bool

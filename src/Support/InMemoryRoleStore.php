@@ -11,25 +11,20 @@ use Infocyph\AuthLayer\Authorization\Role\RoleStoreInterface;
 final class InMemoryRoleStore implements RoleStoreInterface, RoleAssignmentStoreInterface
 {
     /**
-     * @var array<string, Role>
-     */
-    private array $roles = [];
-
-    /**
      * @var array<string, list<string>>
      */
     private array $accountRoles = [];
 
-    public function save(Role $role): void
-    {
-        $this->roles[$role->id] = $role;
-    }
+    /**
+     * @var array<string, Role>
+     */
+    private array $roles = [];
 
     public function assignRole(string $accountId, string $roleId): void
     {
         $this->accountRoles[$accountId] ??= [];
 
-        if (! in_array($roleId, $this->accountRoles[$accountId], true)) {
+        if (!in_array($roleId, $this->accountRoles[$accountId], true)) {
             $this->accountRoles[$accountId][] = $roleId;
         }
     }
@@ -38,7 +33,7 @@ final class InMemoryRoleStore implements RoleStoreInterface, RoleAssignmentStore
     {
         $this->accountRoles[$accountId] = array_values(array_filter(
             $this->accountRoles[$accountId] ?? [],
-            static fn (string $assignedRoleId): bool => $assignedRoleId !== $roleId,
+            static fn(string $assignedRoleId): bool => $assignedRoleId !== $roleId,
         ));
     }
 
@@ -53,5 +48,10 @@ final class InMemoryRoleStore implements RoleStoreInterface, RoleAssignmentStore
         }
 
         return $roles;
+    }
+
+    public function save(Role $role): void
+    {
+        $this->roles[$role->id] = $role;
     }
 }

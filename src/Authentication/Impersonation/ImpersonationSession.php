@@ -14,6 +14,5 @@ final readonly class ImpersonationSession
         public string $targetAccountId,
         public int $startedAt,
         public array $metadata = [],
-    ) {
-    }
+    ) {}
 }

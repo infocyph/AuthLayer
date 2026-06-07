@@ -20,7 +20,19 @@ final readonly class PermissionAuthorizer implements AuthorizerInterface
         private GrantResolver $grants,
         private AbilityMatcher $matcher = new AbilityMatcher(),
         private bool $allowGuests = false,
-    ) {
+    ) {}
+
+    public function authorize(
+        PrincipalInterface $principal,
+        string $ability,
+        mixed $resource = null,
+        array $context = [],
+    ): void {
+        $decision = $this->can($principal, $ability, $resource, $context);
+
+        if (!$decision->allowed) {
+            throw new AuthorizationException($decision->reason ?? 'Authorization failed.', $decision->code);
+        }
     }
 
     public function can(
@@ -50,19 +62,6 @@ final readonly class PermissionAuthorizer implements AuthorizerInterface
         }
 
         return AuthorizationDecision::deny('permission_denied', 'No matching permission or grant was found.', $context);
-    }
-
-    public function authorize(
-        PrincipalInterface $principal,
-        string $ability,
-        mixed $resource = null,
-        array $context = [],
-    ): void {
-        $decision = $this->can($principal, $ability, $resource, $context);
-
-        if (! $decision->allowed) {
-            throw new AuthorizationException($decision->reason ?? 'Authorization failed.', $decision->code);
-        }
     }
 
     /**

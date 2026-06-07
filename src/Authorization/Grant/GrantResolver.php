@@ -15,8 +15,7 @@ final readonly class GrantResolver
         private GrantStoreInterface $grants,
         private AbilityMatcher $matcher = new AbilityMatcher(),
         private ClockInterface $clock = new SystemClock(),
-    ) {
-    }
+    ) {}
 
     /**
      * @return list<AccessGrant>
@@ -27,11 +26,11 @@ final readonly class GrantResolver
         $matches = [];
 
         foreach ($this->grants->grantsForPrincipal($principalId) as $grant) {
-            if ($grant->isExpiredAt($now)) {
+            if ($grant->isRevoked() || $grant->isExpiredAt($now)) {
                 continue;
             }
 
-            if (! $this->matcher->matches($grant->permission, $ability->name)) {
+            if (!$this->matcher->matches($grant->permission, $ability->name)) {
                 continue;
             }
 

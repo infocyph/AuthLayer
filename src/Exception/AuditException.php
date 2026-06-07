@@ -4,6 +4,4 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Exception;
 
-class AuditException extends AuthLayerException
-{
-}
+class AuditException extends AuthLayerException {}

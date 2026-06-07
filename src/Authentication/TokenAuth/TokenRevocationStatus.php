@@ -6,6 +6,7 @@ namespace Infocyph\AuthLayer\Authentication\TokenAuth;
 
 enum TokenRevocationStatus: string
 {
+    case ALREADY_REVOKED = 'already_revoked';
+
     case REVOKED = 'revoked';
-    case NOT_FOUND = 'not_found';
 }

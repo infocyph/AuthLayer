@@ -12,6 +12,5 @@ final readonly class LockoutConfig
         public int $maxPasskeyFailures = 5,
         public int $windowSeconds = 900,
         public int $lockSeconds = 900,
-    ) {
-    }
+    ) {}
 }

@@ -7,7 +7,10 @@ namespace Infocyph\AuthLayer\Authentication\Lockout;
 enum LockoutStatus: string
 {
     case CLEAR = 'clear';
+
     case FAILURE_RECORDED = 'failure_recorded';
+
     case LOCKED = 'locked';
+
     case UNLOCKED = 'unlocked';
 }

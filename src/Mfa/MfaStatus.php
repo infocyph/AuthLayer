@@ -6,12 +6,19 @@ namespace Infocyph\AuthLayer\Mfa;
 
 enum MfaStatus: string
 {
-    case ENROLLED = 'enrolled';
     case ACTIVATED = 'activated';
+
     case CHALLENGE_ISSUED = 'challenge_issued';
-    case VERIFIED = 'verified';
-    case RECOVERY_CODE_VERIFIED = 'recovery_code_verified';
-    case REMOVED = 'removed';
-    case INVALID = 'invalid';
+
+    case ENROLLED = 'enrolled';
+
     case EXPIRED = 'expired';
+
+    case INVALID = 'invalid';
+
+    case RECOVERY_CODE_VERIFIED = 'recovery_code_verified';
+
+    case REMOVED = 'removed';
+
+    case VERIFIED = 'verified';
 }

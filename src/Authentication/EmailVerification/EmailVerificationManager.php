@@ -4,32 +4,30 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Authentication\EmailVerification;
 
-use Infocyph\AuthLayer\Audit\AuthEvent;
 use Infocyph\AuthLayer\Audit\AuthEventSeverity;
 use Infocyph\AuthLayer\Audit\AuthEventType;
-use Infocyph\AuthLayer\Contract\Clock\ClockInterface;
-use Infocyph\AuthLayer\Contract\Id\AuthIdGeneratorInterface;
-use Infocyph\AuthLayer\Contract\Notification\AuthNotifierInterface;
-use Infocyph\AuthLayer\Contract\Security\TokenVerificationResult;
-use Infocyph\AuthLayer\Contract\Storage\AccountStoreInterface;
-use Infocyph\AuthLayer\Contract\Storage\AuditEventStoreInterface;
-use Infocyph\AuthLayer\Contract\Storage\EmailVerificationStoreInterface;
+use Infocyph\AuthLayer\Authentication\Support\AbstractTokenRequestManager;
+use Infocyph\AuthLayer\Contract\Security\TokenVerificationResult as VerifiedToken;
+use Infocyph\AuthLayer\Contract\Storage\EmailVerificationStoreInterface as VerificationStore;
 use Infocyph\AuthLayer\Notification\AuthNotification;
 use Infocyph\AuthLayer\Notification\AuthNotificationType;
-use Infocyph\AuthLayer\Support\SystemClock;
+use Infocyph\AuthLayer\Support\ConsumableTokenRequestProcessor;
 
-final readonly class EmailVerificationManager
+final readonly class EmailVerificationManager extends AbstractTokenRequestManager
 {
+    private const string REQUEST_CONTEXT_KEY = 'request_id';
+
     public function __construct(
         private EmailVerificationTokenServiceInterface $tokens,
-        private EmailVerificationStoreInterface $store,
-        private AccountStoreInterface $accounts,
-        private AuthNotifierInterface $notifier,
-        private AuditEventStoreInterface $audit,
-        private AuthIdGeneratorInterface $ids,
-        private int $ttlSeconds = 3600,
-        private ClockInterface $clock = new SystemClock(),
+        private VerificationStore $store,
+        \Infocyph\AuthLayer\Contract\Storage\AccountStoreInterface $accounts,
+        \Infocyph\AuthLayer\Contract\Notification\AuthNotifierInterface $notifier,
+        \Infocyph\AuthLayer\Contract\Storage\AuditEventStoreInterface $audit,
+        \Infocyph\AuthLayer\Contract\Id\AuthIdGeneratorInterface $ids,
+        int $ttlSeconds = 3600,
+        \Infocyph\AuthLayer\Contract\Clock\ClockInterface $clock = new \Infocyph\AuthLayer\Support\SystemClock(),
     ) {
+        parent::__construct($accounts, $notifier, $audit, $ids, $ttlSeconds, $clock);
     }
 
     /**
@@ -42,20 +40,10 @@ final readonly class EmailVerificationManager
         $request = new EmailVerificationRequest($requestId, $accountId, $email, $now, $now + $this->ttlSeconds, context: $context);
 
         $this->store->save($request);
-        $token = $this->tokens->issue($accountId, $email, ['request_id' => $requestId] + $context);
-        $this->notifier->send(new AuthNotification(AuthNotificationType::EMAIL_VERIFICATION_REQUESTED, $accountId, ['email' => $email, 'request_id' => $requestId, 'token' => $token] + $context));
-        $this->audit->record(new AuthEvent(
-            id: $this->ids->auditEventId(),
-            type: AuthEventType::EMAIL_VERIFICATION_REQUESTED,
-            severity: AuthEventSeverity::INFO,
-            accountId: $accountId,
-            actorId: $accountId,
-            sessionId: $context['session_id'] ?? null,
-            deviceId: $context['device_id'] ?? null,
-            correlationId: $this->ids->correlationId(),
-            occurredAt: $now,
-            metadata: ['request_id' => $requestId, 'email' => $email] + $context,
-        ));
+        $requestContext = [self::REQUEST_CONTEXT_KEY => $requestId];
+        $token = $this->tokens->issue($accountId, $email, $requestContext + $context);
+        $this->notifier->send(new AuthNotification(AuthNotificationType::EMAIL_VERIFICATION_REQUESTED, $accountId, ['email' => $email] + $requestContext + ['token' => $token] + $context));
+        $this->recordEvent(AuthEventType::EMAIL_VERIFICATION_REQUESTED, $accountId, $context, ['email' => $email] + $requestContext, AuthEventSeverity::INFO);
 
         return new EmailVerificationResult(EmailVerificationStatus::ISSUED, $request, $token, 'email_verification_requested', $context);
     }
@@ -65,48 +53,75 @@ final readonly class EmailVerificationManager
      */
     public function verify(string $token, array $context = []): EmailVerificationResult
     {
-        $verification = $this->tokens->verify($token);
+        $now = $this->clock->now();
 
-        if (! $verification->verified) {
-            return new EmailVerificationResult(EmailVerificationStatus::INVALID, code: $verification->failureReason ?? 'invalid_token', context: $context);
-        }
+        return ConsumableTokenRequestProcessor::process(
+            verification: $this->tokens->verify($token),
+            resolveRequest: $this->resolveRequest(...),
+            invalidResult: fn(string $reason): EmailVerificationResult => $this->invalidVerificationResult($reason, $context),
+            missingRequestResult: fn(): EmailVerificationResult => $this->missingVerificationResult($context),
+            isConsumed: static fn(EmailVerificationRequest $request): bool => $request->isConsumed(),
+            consumedResult: fn(EmailVerificationRequest $request): EmailVerificationResult => $this->consumedVerificationResult($request, $context),
+            isExpired: static fn(EmailVerificationRequest $request): bool => $request->isExpiredAt($now),
+            expiredResult: fn(EmailVerificationRequest $request): EmailVerificationResult => $this->expiredVerificationResult($request, $context),
+            successResult: fn(EmailVerificationRequest $request): EmailVerificationResult => $this->completeVerification($request, $context),
+        );
+    }
 
-        $request = $this->resolveRequest($verification);
-
-        if ($request === null) {
-            return new EmailVerificationResult(EmailVerificationStatus::INVALID, code: 'verification_request_not_found', context: $context);
-        }
-
-        if ($request->isConsumed()) {
-            return new EmailVerificationResult(EmailVerificationStatus::CONSUMED, $request, code: 'verification_already_consumed', context: $context);
-        }
-
-        if ($request->isExpiredAt($this->clock->now())) {
-            return new EmailVerificationResult(EmailVerificationStatus::EXPIRED, $request, code: 'verification_expired', context: $context);
-        }
-
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function completeVerification(EmailVerificationRequest $request, array $context): EmailVerificationResult
+    {
         $this->store->consume($request->id);
         $this->accounts->markVerified($request->accountId, $this->clock->now());
-        $this->audit->record(new AuthEvent(
-            id: $this->ids->auditEventId(),
-            type: AuthEventType::EMAIL_VERIFIED,
-            severity: AuthEventSeverity::INFO,
-            accountId: $request->accountId,
-            actorId: $request->accountId,
-            sessionId: $context['session_id'] ?? null,
-            deviceId: $context['device_id'] ?? null,
-            correlationId: $this->ids->correlationId(),
-            occurredAt: $this->clock->now(),
-            metadata: ['request_id' => $request->id, 'email' => $request->email] + $context,
-        ));
+        $this->recordEvent(
+            AuthEventType::EMAIL_VERIFIED,
+            $request->accountId,
+            $context,
+            [self::REQUEST_CONTEXT_KEY => $request->id, 'email' => $request->email],
+            AuthEventSeverity::INFO,
+        );
 
         return new EmailVerificationResult(EmailVerificationStatus::VERIFIED, $request, code: 'email_verified', context: $context);
     }
 
-    private function resolveRequest(TokenVerificationResult $verification): ?EmailVerificationRequest
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function consumedVerificationResult(EmailVerificationRequest $request, array $context): EmailVerificationResult
     {
-        $requestId = $verification->claims['request_id'] ?? $verification->tokenId;
+        return new EmailVerificationResult(EmailVerificationStatus::CONSUMED, $request, code: 'verification_already_consumed', context: $context);
+    }
 
-        return is_string($requestId) && $requestId !== '' ? $this->store->find($requestId) : null;
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function expiredVerificationResult(EmailVerificationRequest $request, array $context): EmailVerificationResult
+    {
+        return new EmailVerificationResult(EmailVerificationStatus::EXPIRED, $request, code: 'verification_expired', context: $context);
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function invalidVerificationResult(string $reason, array $context): EmailVerificationResult
+    {
+        return new EmailVerificationResult(EmailVerificationStatus::INVALID, code: $reason, context: $context);
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function missingVerificationResult(array $context): EmailVerificationResult
+    {
+        return new EmailVerificationResult(EmailVerificationStatus::INVALID, code: 'verification_request_not_found', context: $context);
+    }
+
+    private function resolveRequest(VerifiedToken $verification): ?EmailVerificationRequest
+    {
+        $requestId = $this->resolveRequestId($verification);
+
+        return $requestId !== null ? $this->store->find($requestId) : null;
     }
 }

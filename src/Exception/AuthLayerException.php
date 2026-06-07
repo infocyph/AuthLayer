@@ -6,6 +6,4 @@ namespace Infocyph\AuthLayer\Exception;
 
 use RuntimeException;
 
-class AuthLayerException extends RuntimeException
-{
-}
+class AuthLayerException extends RuntimeException {}

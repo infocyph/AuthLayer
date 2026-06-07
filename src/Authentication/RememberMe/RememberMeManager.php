@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Authentication\RememberMe;
 
-use Infocyph\AuthLayer\Audit\AuthEvent;
 use Infocyph\AuthLayer\Audit\AuthEventSeverity;
 use Infocyph\AuthLayer\Audit\AuthEventType;
 use Infocyph\AuthLayer\Contract\Clock\ClockInterface;
 use Infocyph\AuthLayer\Contract\Id\AuthIdGeneratorInterface;
 use Infocyph\AuthLayer\Contract\Storage\AuditEventStoreInterface;
 use Infocyph\AuthLayer\Contract\Storage\RememberTokenStoreInterface;
+use Infocyph\AuthLayer\Support\AuthEventRecorder;
+use Infocyph\AuthLayer\Support\ContextValue;
 use Infocyph\AuthLayer\Support\SystemClock;
 
 final readonly class RememberMeManager
@@ -21,8 +22,7 @@ final readonly class RememberMeManager
         private AuditEventStoreInterface $audit,
         private AuthIdGeneratorInterface $ids,
         private ClockInterface $clock = new SystemClock(),
-    ) {
-    }
+    ) {}
 
     /**
      * @param array<string, mixed> $context
@@ -51,27 +51,10 @@ final readonly class RememberMeManager
     /**
      * @param array<string, mixed> $context
      */
-    public function verify(string $token, array $context = []): RememberMeResult
+    public function revokeFamily(string $familyId, ?string $accountId = null, ?string $deviceId = null, array $context = []): void
     {
-        $verification = $this->tokens->verify($token);
-        $record = $verification->record;
-
-        if ($verification->suspiciousReuse && $record !== null) {
-            $this->store->revokeFamily($record->familyId);
-            $this->recordAudit(AuthEventType::REMEMBER_TOKEN_REVOKED, $record->accountId, $record->deviceId, ['reason' => 'suspicious_reuse', 'selector' => $record->selector] + $context, AuthEventSeverity::WARNING);
-
-            return new RememberMeResult(RememberTokenStatus::REUSED, record: $record, code: $verification->failureReason ?? 'remember_token_reused', context: $context);
-        }
-
-        if (! $verification->verified || $record === null || $this->store->wasFamilyRevoked($record->familyId)) {
-            return new RememberMeResult(RememberTokenStatus::INVALID, code: $verification->failureReason ?? 'invalid_remember_token', context: $context);
-        }
-
-        if ($record->revokedAt !== null || $record->isExpiredAt($this->clock->now())) {
-            return new RememberMeResult(RememberTokenStatus::EXPIRED, record: $record, code: 'remember_token_expired', context: $context);
-        }
-
-        return new RememberMeResult(RememberTokenStatus::VERIFIED, record: $record, code: 'remember_token_verified', context: $context);
+        $this->store->revokeFamily($familyId);
+        $this->recordAudit(AuthEventType::REMEMBER_TOKEN_REVOKED, $accountId, $deviceId, ['family_id' => $familyId] + $context);
     }
 
     /**
@@ -100,10 +83,31 @@ final readonly class RememberMeManager
     /**
      * @param array<string, mixed> $context
      */
-    public function revokeFamily(string $familyId, ?string $accountId = null, ?string $deviceId = null, array $context = []): void
+    public function verify(string $token, array $context = []): RememberMeResult
     {
-        $this->store->revokeFamily($familyId);
-        $this->recordAudit(AuthEventType::REMEMBER_TOKEN_REVOKED, $accountId, $deviceId, ['family_id' => $familyId] + $context);
+        $verification = $this->tokens->verify($token);
+        $record = $verification->record;
+
+        if ($verification->suspiciousReuse && $record !== null) {
+            $this->store->revokeFamily($record->familyId);
+            $this->recordAudit(AuthEventType::REMEMBER_TOKEN_REVOKED, $record->accountId, $record->deviceId, ['reason' => 'suspicious_reuse', 'selector' => $record->selector] + $context, AuthEventSeverity::WARNING);
+
+            return new RememberMeResult(RememberTokenStatus::REUSED, record: $record, code: $verification->failureReason ?? 'remember_token_reused', context: $context);
+        }
+
+        if (!$verification->verified || $record === null || $this->store->wasFamilyRevoked($record->familyId)) {
+            return new RememberMeResult(RememberTokenStatus::INVALID, code: $verification->failureReason ?? 'invalid_remember_token', context: $context);
+        }
+
+        if ($record->isRevoked() || $record->isExpiredAt($this->clock->now())) {
+            return new RememberMeResult(RememberTokenStatus::EXPIRED, record: $record, code: 'remember_token_expired', context: $context);
+        }
+
+        $usedAt = $this->clock->now();
+        $this->store->markUsed($record->id, $usedAt);
+        $record = $record->withLastUsedAt($usedAt);
+
+        return new RememberMeResult(RememberTokenStatus::VERIFIED, record: $record, code: 'remember_token_verified', context: $context);
     }
 
     /**
@@ -111,17 +115,16 @@ final readonly class RememberMeManager
      */
     private function recordAudit(AuthEventType $type, ?string $accountId, ?string $deviceId, array $metadata, AuthEventSeverity $severity = AuthEventSeverity::INFO): void
     {
-        $this->audit->record(new AuthEvent(
-            id: $this->ids->auditEventId(),
-            type: $type,
-            severity: $severity,
-            accountId: $accountId,
-            actorId: $accountId,
-            sessionId: $metadata['session_id'] ?? null,
-            deviceId: $deviceId,
-            correlationId: $this->ids->correlationId(),
-            occurredAt: $this->clock->now(),
+        AuthEventRecorder::record(
+            $this->audit,
+            $this->ids,
+            $this->clock,
+            $type,
+            $accountId,
             metadata: $metadata,
-        ));
+            severity: $severity,
+            deviceId: $deviceId,
+            sessionId: ContextValue::stringOrNull($metadata, 'session_id'),
+        );
     }
 }

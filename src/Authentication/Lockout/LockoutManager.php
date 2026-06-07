@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Authentication\Lockout;
 
-use Infocyph\AuthLayer\Audit\AuthEvent;
 use Infocyph\AuthLayer\Audit\AuthEventSeverity;
 use Infocyph\AuthLayer\Audit\AuthEventType;
 use Infocyph\AuthLayer\Contract\Cache\CounterStoreInterface;
@@ -13,6 +12,8 @@ use Infocyph\AuthLayer\Contract\Id\AuthIdGeneratorInterface;
 use Infocyph\AuthLayer\Contract\Storage\AuditEventStoreInterface;
 use Infocyph\AuthLayer\Contract\Storage\LockoutReason;
 use Infocyph\AuthLayer\Contract\Storage\LockoutStoreInterface;
+use Infocyph\AuthLayer\Support\AuthEventRecorder;
+use Infocyph\AuthLayer\Support\ContextValue;
 use Infocyph\AuthLayer\Support\SystemClock;
 
 final readonly class LockoutManager
@@ -24,23 +25,7 @@ final readonly class LockoutManager
         private AuthIdGeneratorInterface $ids,
         private LockoutConfig $config = new LockoutConfig(),
         private ClockInterface $clock = new SystemClock(),
-    ) {
-    }
-
-    public function recordLoginFailure(string $accountId, array $context = []): LockoutResult
-    {
-        return $this->recordFailure($accountId, 'login', $this->config->maxLoginFailures, LockoutReason::TOO_MANY_LOGIN_ATTEMPTS, $context);
-    }
-
-    public function recordMfaFailure(string $accountId, array $context = []): LockoutResult
-    {
-        return $this->recordFailure($accountId, 'mfa', $this->config->maxMfaFailures, LockoutReason::TOO_MANY_MFA_FAILURES, $context);
-    }
-
-    public function recordPasskeyFailure(string $accountId, array $context = []): LockoutResult
-    {
-        return $this->recordFailure($accountId, 'passkey', $this->config->maxPasskeyFailures, LockoutReason::TOO_MANY_PASSKEY_FAILURES, $context);
-    }
+    ) {}
 
     public function clearFailures(string $accountId): void
     {
@@ -54,6 +39,9 @@ final readonly class LockoutManager
         return $this->locks->isLocked($accountId);
     }
 
+    /**
+     * @param array<string, mixed> $context
+     */
     public function lock(string $accountId, LockoutReason $reason, ?int $until = null, array $context = []): LockoutResult
     {
         $lockedUntil = $until ?? ($this->clock->now() + $this->config->lockSeconds);
@@ -63,6 +51,33 @@ final readonly class LockoutManager
         return new LockoutResult(LockoutStatus::LOCKED, $accountId, $reason, $lockedUntil, code: 'account_locked', context: $context);
     }
 
+    /**
+     * @param array<string, mixed> $context
+     */
+    public function recordLoginFailure(string $accountId, array $context = []): LockoutResult
+    {
+        return $this->recordFailure($accountId, 'login', $this->config->maxLoginFailures, LockoutReason::TOO_MANY_LOGIN_ATTEMPTS, $context);
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    public function recordMfaFailure(string $accountId, array $context = []): LockoutResult
+    {
+        return $this->recordFailure($accountId, 'mfa', $this->config->maxMfaFailures, LockoutReason::TOO_MANY_MFA_FAILURES, $context);
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    public function recordPasskeyFailure(string $accountId, array $context = []): LockoutResult
+    {
+        return $this->recordFailure($accountId, 'passkey', $this->config->maxPasskeyFailures, LockoutReason::TOO_MANY_PASSKEY_FAILURES, $context);
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
     public function unlock(string $accountId, array $context = []): LockoutResult
     {
         $this->locks->unlock($accountId);
@@ -72,6 +87,32 @@ final readonly class LockoutManager
         return new LockoutResult(LockoutStatus::UNLOCKED, $accountId, code: 'account_unlocked', context: $context);
     }
 
+    private function counterKey(string $type, string $accountId): string
+    {
+        return 'lockout:' . $type . ':' . $accountId;
+    }
+
+    /**
+     * @param array<string, mixed> $metadata
+     */
+    private function recordAudit(AuthEventType $type, string $accountId, array $metadata = [], AuthEventSeverity $severity = AuthEventSeverity::INFO): void
+    {
+        AuthEventRecorder::record(
+            $this->audit,
+            $this->ids,
+            $this->clock,
+            $type,
+            $accountId,
+            metadata: $metadata,
+            severity: $severity,
+            sessionId: ContextValue::stringOrNull($metadata, 'session_id'),
+            deviceId: ContextValue::stringOrNull($metadata, 'device_id'),
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
     private function recordFailure(string $accountId, string $type, int $threshold, LockoutReason $reason, array $context): LockoutResult
     {
         $attempts = $this->counters->increment($this->counterKey($type, $accountId), ttlSeconds: $this->config->windowSeconds);
@@ -88,26 +129,5 @@ final readonly class LockoutManager
             code: $type . '_failure_recorded',
             context: $context,
         );
-    }
-
-    private function counterKey(string $type, string $accountId): string
-    {
-        return 'lockout:' . $type . ':' . $accountId;
-    }
-
-    private function recordAudit(AuthEventType $type, string $accountId, array $metadata = [], AuthEventSeverity $severity = AuthEventSeverity::INFO): void
-    {
-        $this->audit->record(new AuthEvent(
-            id: $this->ids->auditEventId(),
-            type: $type,
-            severity: $severity,
-            accountId: $accountId,
-            actorId: $accountId,
-            sessionId: $metadata['session_id'] ?? null,
-            deviceId: $metadata['device_id'] ?? null,
-            correlationId: $this->ids->correlationId(),
-            occurredAt: $this->clock->now(),
-            metadata: $metadata,
-        ));
     }
 }

@@ -10,9 +10,9 @@ final class CurrentPrincipalContext implements CurrentPrincipalProviderInterface
 {
     private ?PrincipalInterface $principal = null;
 
-    public function set(?PrincipalInterface $principal): void
+    public function clear(): void
     {
-        $this->principal = $principal;
+        $this->principal = null;
     }
 
     public function get(): ?PrincipalInterface
@@ -29,8 +29,8 @@ final class CurrentPrincipalContext implements CurrentPrincipalProviderInterface
         return $this->principal;
     }
 
-    public function clear(): void
+    public function set(?PrincipalInterface $principal): void
     {
-        $this->principal = null;
+        $this->principal = $principal;
     }
 }

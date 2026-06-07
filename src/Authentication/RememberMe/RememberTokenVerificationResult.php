@@ -11,6 +11,5 @@ final readonly class RememberTokenVerificationResult
         public ?RememberTokenRecord $record = null,
         public bool $suspiciousReuse = false,
         public ?string $failureReason = null,
-    ) {
-    }
+    ) {}
 }

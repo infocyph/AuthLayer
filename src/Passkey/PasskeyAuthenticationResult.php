@@ -17,6 +17,5 @@ final readonly class PasskeyAuthenticationResult
         public string $signature,
         public ?string $userHandle = null,
         public array $metadata = [],
-    ) {
-    }
+    ) {}
 }

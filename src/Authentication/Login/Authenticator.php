@@ -6,7 +6,6 @@ namespace Infocyph\AuthLayer\Authentication\Login;
 
 use Infocyph\AuthLayer\Account\AccountInterface;
 use Infocyph\AuthLayer\Account\AccountStatus;
-use Infocyph\AuthLayer\Audit\AuthEvent;
 use Infocyph\AuthLayer\Audit\AuthEventSeverity;
 use Infocyph\AuthLayer\Audit\AuthEventType;
 use Infocyph\AuthLayer\Authentication\Lockout\LockoutManager;
@@ -21,6 +20,8 @@ use Infocyph\AuthLayer\Contract\Storage\AuditEventStoreInterface;
 use Infocyph\AuthLayer\Principal\Principal;
 use Infocyph\AuthLayer\Principal\PrincipalInterface;
 use Infocyph\AuthLayer\Principal\PrincipalType;
+use Infocyph\AuthLayer\Support\AuthEventRecorder;
+use Infocyph\AuthLayer\Support\ContextValue;
 use Infocyph\AuthLayer\Support\SystemClock;
 
 final readonly class Authenticator implements AuthenticatorInterface
@@ -34,8 +35,7 @@ final readonly class Authenticator implements AuthenticatorInterface
         private AuditEventStoreInterface $audit,
         private LockoutManager $lockouts,
         private ClockInterface $clock = new SystemClock(),
-    ) {
-    }
+    ) {}
 
     public function login(LoginRequest $request): LoginResult
     {
@@ -63,7 +63,7 @@ final readonly class Authenticator implements AuthenticatorInterface
 
         $verification = $this->passwords->verify($request->password, $hash);
 
-        if (! $verification->verified) {
+        if (!$verification->verified) {
             $lockout = $this->lockouts->recordLoginFailure($account->id(), $request->context);
 
             return $this->failure(
@@ -81,20 +81,19 @@ final readonly class Authenticator implements AuthenticatorInterface
         }
 
         $principal = new Principal($account->id(), PrincipalType::ACCOUNT, $account->id(), $account->metadata());
-        $session = $this->sessions->create($account->id(), $request->context['device_id'] ?? null, $request->context);
+        $session = $this->sessions->create($account->id(), ContextValue::stringOrNull($request->context, 'device_id'), $request->context);
 
-        $this->audit->record(new AuthEvent(
-            id: $this->ids->auditEventId(),
-            type: AuthEventType::LOGIN_SUCCESS,
-            severity: AuthEventSeverity::INFO,
-            accountId: $account->id(),
+        AuthEventRecorder::record(
+            $this->audit,
+            $this->ids,
+            $this->clock,
+            AuthEventType::LOGIN_SUCCESS,
+            $account->id(),
             actorId: $principal->id(),
-            sessionId: $session->id,
-            deviceId: $session->deviceId,
-            correlationId: $this->ids->correlationId(),
-            occurredAt: $this->clock->now(),
             metadata: $request->context,
-        ));
+            deviceId: $session->deviceId,
+            sessionId: $session->id,
+        );
 
         return new LoginResult(LoginStatus::AUTHENTICATED, $principal, $session, 'authenticated', $verification->needsRehash, $request->context);
     }
@@ -107,19 +106,39 @@ final readonly class Authenticator implements AuthenticatorInterface
             $this->sessions->revokeAllForAccount($principal->accountId());
         }
 
-        $this->audit->record(new AuthEvent(
-            id: $this->ids->auditEventId(),
-            type: AuthEventType::LOGOUT,
-            severity: AuthEventSeverity::INFO,
-            accountId: $principal->accountId(),
+        AuthEventRecorder::record(
+            $this->audit,
+            $this->ids,
+            $this->clock,
+            AuthEventType::LOGOUT,
+            $principal->accountId(),
             actorId: $principal->id(),
             sessionId: $sessionId,
-            deviceId: null,
-            correlationId: $this->ids->correlationId(),
-            occurredAt: $this->clock->now(),
-        ));
+        );
     }
 
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function failure(LoginStatus $status, ?AccountInterface $account, string $code, array $context): LoginResult
+    {
+        AuthEventRecorder::record(
+            $this->audit,
+            $this->ids,
+            $this->clock,
+            AuthEventType::LOGIN_FAILURE,
+            $account?->id(),
+            metadata: ['code' => $code] + $context,
+            severity: AuthEventSeverity::WARNING,
+            deviceId: ContextValue::stringOrNull($context, 'device_id'),
+        );
+
+        return new LoginResult($status, code: $code, context: $context);
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
     private function guardStatus(AccountInterface $account, array $context): ?LoginResult
     {
         return match ($account->status()) {
@@ -129,26 +148,5 @@ final readonly class Authenticator implements AuthenticatorInterface
             AccountStatus::MFA_ENROLLMENT_REQUIRED => $this->failure(LoginStatus::MFA_REQUIRED, $account, 'mfa_required', $context),
             default => null,
         };
-    }
-
-    /**
-     * @param array<string, mixed> $context
-     */
-    private function failure(LoginStatus $status, ?AccountInterface $account, string $code, array $context): LoginResult
-    {
-        $this->audit->record(new AuthEvent(
-            id: $this->ids->auditEventId(),
-            type: AuthEventType::LOGIN_FAILURE,
-            severity: AuthEventSeverity::WARNING,
-            accountId: $account?->id(),
-            actorId: $account?->id(),
-            sessionId: null,
-            deviceId: $context['device_id'] ?? null,
-            correlationId: $this->ids->correlationId(),
-            occurredAt: $this->clock->now(),
-            metadata: ['code' => $code] + $context,
-        ));
-
-        return new LoginResult($status, code: $code, context: $context);
     }
 }

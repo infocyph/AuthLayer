@@ -17,18 +17,7 @@ final class InMemoryLockoutStore implements LockoutStoreInterface
 
     public function __construct(
         private readonly ClockInterface $clock = new SystemClock(),
-    ) {
-    }
-
-    public function lock(string $accountId, LockoutReason $reason, ?int $until = null): void
-    {
-        $this->locks[$accountId] = ['reason' => $reason, 'until' => $until];
-    }
-
-    public function unlock(string $accountId): void
-    {
-        unset($this->locks[$accountId]);
-    }
+    ) {}
 
     public function isLocked(string $accountId): bool
     {
@@ -45,5 +34,15 @@ final class InMemoryLockoutStore implements LockoutStoreInterface
         }
 
         return true;
+    }
+
+    public function lock(string $accountId, LockoutReason $reason, ?int $until = null): void
+    {
+        $this->locks[$accountId] = ['reason' => $reason, 'until' => $until];
+    }
+
+    public function unlock(string $accountId): void
+    {
+        unset($this->locks[$accountId]);
     }
 }

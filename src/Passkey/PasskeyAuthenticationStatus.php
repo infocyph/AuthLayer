@@ -6,7 +6,9 @@ namespace Infocyph\AuthLayer\Passkey;
 
 enum PasskeyAuthenticationStatus: string
 {
-    case STARTED = 'started';
-    case VERIFIED = 'verified';
     case INVALID = 'invalid';
+
+    case STARTED = 'started';
+
+    case VERIFIED = 'verified';
 }

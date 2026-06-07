@@ -17,8 +17,7 @@ final readonly class AccountManager
         private AccountStoreInterface $store,
         private AuthIdGeneratorInterface $ids,
         private ClockInterface $clock = new SystemClock(),
-    ) {
-    }
+    ) {}
 
     /**
      * @param array<string, mixed> $metadata
@@ -40,19 +39,9 @@ final readonly class AccountManager
         return $this->updateStatus($accountId, AccountStatus::DISABLED, 'account_disabled');
     }
 
-    public function suspend(string $accountId): AccountResult
-    {
-        return $this->updateStatus($accountId, AccountStatus::SUSPENDED, 'account_suspended');
-    }
-
     public function lock(string $accountId): AccountResult
     {
         return $this->updateStatus($accountId, AccountStatus::LOCKED, 'account_locked');
-    }
-
-    public function unlock(string $accountId): AccountResult
-    {
-        return $this->updateStatus($accountId, AccountStatus::ACTIVE, 'account_unlocked');
     }
 
     public function markVerified(string $accountId): AccountResult
@@ -66,6 +55,26 @@ final readonly class AccountManager
         $this->store->markVerified($accountId, $this->clock->now());
 
         return new AccountResult(AccountActionStatus::UPDATED, $this->accounts->findById($accountId), 'account_verified');
+    }
+
+    public function requireMfaEnrollment(string $accountId): AccountResult
+    {
+        return $this->updateStatus($accountId, AccountStatus::MFA_ENROLLMENT_REQUIRED, 'mfa_enrollment_required');
+    }
+
+    public function requirePasswordChange(string $accountId): AccountResult
+    {
+        return $this->updateStatus($accountId, AccountStatus::PASSWORD_CHANGE_REQUIRED, 'password_change_required');
+    }
+
+    public function suspend(string $accountId): AccountResult
+    {
+        return $this->updateStatus($accountId, AccountStatus::SUSPENDED, 'account_suspended');
+    }
+
+    public function unlock(string $accountId): AccountResult
+    {
+        return $this->updateStatus($accountId, AccountStatus::ACTIVE, 'account_unlocked');
     }
 
     /**
@@ -82,16 +91,6 @@ final readonly class AccountManager
         $this->store->updateMetadata($accountId, $metadata);
 
         return new AccountResult(AccountActionStatus::UPDATED, $this->accounts->findById($accountId), 'account_metadata_updated', $metadata);
-    }
-
-    public function requirePasswordChange(string $accountId): AccountResult
-    {
-        return $this->updateStatus($accountId, AccountStatus::PASSWORD_CHANGE_REQUIRED, 'password_change_required');
-    }
-
-    public function requireMfaEnrollment(string $accountId): AccountResult
-    {
-        return $this->updateStatus($accountId, AccountStatus::MFA_ENROLLMENT_REQUIRED, 'mfa_enrollment_required');
     }
 
     private function updateStatus(string $accountId, AccountStatus $status, string $code): AccountResult

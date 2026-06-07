@@ -11,6 +11,11 @@ use Infocyph\AuthLayer\Authorization\Permission\PermissionStoreInterface;
 final class InMemoryPermissionStore implements PermissionStoreInterface, PermissionAssignmentStoreInterface
 {
     /**
+     * @var array<string, list<string>>
+     */
+    private array $accountPermissions = [];
+
+    /**
      * @var array<string, Permission>
      */
     private array $permissions = [];
@@ -18,36 +23,16 @@ final class InMemoryPermissionStore implements PermissionStoreInterface, Permiss
     /**
      * @var array<string, list<string>>
      */
-    private array $accountPermissions = [];
-
-    /**
-     * @var array<string, list<string>>
-     */
     private array $rolePermissions = [];
-
-    public function save(Permission $permission): void
-    {
-        $this->permissions[$permission->id] = $permission;
-    }
 
     public function assignPermissionToAccount(string $accountId, string $permissionId): void
     {
         $this->assign($this->accountPermissions, $accountId, $permissionId);
     }
 
-    public function revokePermissionFromAccount(string $accountId, string $permissionId): void
-    {
-        $this->revoke($this->accountPermissions, $accountId, $permissionId);
-    }
-
     public function assignPermissionToRole(string $roleId, string $permissionId): void
     {
         $this->assign($this->rolePermissions, $roleId, $permissionId);
-    }
-
-    public function revokePermissionFromRole(string $roleId, string $permissionId): void
-    {
-        $this->revoke($this->rolePermissions, $roleId, $permissionId);
     }
 
     public function permissionsForAccount(string $accountId): array
@@ -68,6 +53,21 @@ final class InMemoryPermissionStore implements PermissionStoreInterface, Permiss
         return $this->resolve(array_keys($ids));
     }
 
+    public function revokePermissionFromAccount(string $accountId, string $permissionId): void
+    {
+        $this->revoke($this->accountPermissions, $accountId, $permissionId);
+    }
+
+    public function revokePermissionFromRole(string $roleId, string $permissionId): void
+    {
+        $this->revoke($this->rolePermissions, $roleId, $permissionId);
+    }
+
+    public function save(Permission $permission): void
+    {
+        $this->permissions[$permission->id] = $permission;
+    }
+
     /**
      * @param array<string, list<string>> $bucket
      */
@@ -75,20 +75,9 @@ final class InMemoryPermissionStore implements PermissionStoreInterface, Permiss
     {
         $bucket[$key] ??= [];
 
-        if (! in_array($permissionId, $bucket[$key], true)) {
+        if (!in_array($permissionId, $bucket[$key], true)) {
             $bucket[$key][] = $permissionId;
         }
-    }
-
-    /**
-     * @param array<string, list<string>> $bucket
-     */
-    private function revoke(array &$bucket, string $key, string $permissionId): void
-    {
-        $bucket[$key] = array_values(array_filter(
-            $bucket[$key] ?? [],
-            static fn (string $assignedPermissionId): bool => $assignedPermissionId !== $permissionId,
-        ));
     }
 
     /**
@@ -106,5 +95,16 @@ final class InMemoryPermissionStore implements PermissionStoreInterface, Permiss
         }
 
         return array_values($permissions);
+    }
+
+    /**
+     * @param array<string, list<string>> $bucket
+     */
+    private function revoke(array &$bucket, string $key, string $permissionId): void
+    {
+        $bucket[$key] = array_values(array_filter(
+            $bucket[$key] ?? [],
+            static fn(string $assignedPermissionId): bool => $assignedPermissionId !== $permissionId,
+        ));
     }
 }

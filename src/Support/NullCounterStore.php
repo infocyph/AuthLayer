@@ -13,7 +13,5 @@ final class NullCounterStore implements CounterStoreInterface
         return 0;
     }
 
-    public function reset(string $key): void
-    {
-    }
+    public function reset(string $key): void {}
 }

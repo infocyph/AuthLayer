@@ -16,6 +16,5 @@ final readonly class PasskeyVerificationResult
         public ?int $signCount = null,
         public ?string $reason = null,
         public array $context = [],
-    ) {
-    }
+    ) {}
 }

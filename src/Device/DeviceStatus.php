@@ -6,9 +6,13 @@ namespace Infocyph\AuthLayer\Device;
 
 enum DeviceStatus: string
 {
-    case REGISTERED = 'registered';
-    case TRUSTED = 'trusted';
-    case TOUCHED = 'touched';
-    case REVOKED = 'revoked';
     case NOT_FOUND = 'not_found';
+
+    case REGISTERED = 'registered';
+
+    case REVOKED = 'revoked';
+
+    case TOUCHED = 'touched';
+
+    case TRUSTED = 'trusted';
 }

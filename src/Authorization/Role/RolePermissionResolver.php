@@ -12,8 +12,7 @@ final readonly class RolePermissionResolver
     public function __construct(
         private RoleStoreInterface $roles,
         private PermissionStoreInterface $permissions,
-    ) {
-    }
+    ) {}
 
     /**
      * @return list<Permission>
@@ -21,7 +20,7 @@ final readonly class RolePermissionResolver
     public function forAccount(string $accountId): array
     {
         $roles = $this->roles->rolesForAccount($accountId);
-        $roleIds = array_map(static fn (Role $role): string => $role->id, $roles);
+        $roleIds = array_map(static fn(Role $role): string => $role->id, $roles);
 
         if ($roleIds === []) {
             return [];

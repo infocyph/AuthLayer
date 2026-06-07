@@ -7,5 +7,6 @@ namespace Infocyph\AuthLayer\Authentication\Session;
 enum SessionStatus: string
 {
     case ACTIVE = 'active';
+
     case EXPIRED = 'expired';
 }
