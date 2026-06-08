@@ -1,6 +1,0 @@
-{
-  "preset": "standard",
-  "duplicates": {
-    "exclude": ["testing"]
-  }
-}
