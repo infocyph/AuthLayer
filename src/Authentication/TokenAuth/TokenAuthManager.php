@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Authentication\TokenAuth;
 
-use Infocyph\AuthLayer\Audit\AuthEvent;
 use Infocyph\AuthLayer\Audit\AuthEventSeverity;
 use Infocyph\AuthLayer\Audit\AuthEventType;
 use Infocyph\AuthLayer\Contract\Clock\ClockInterface;
@@ -12,6 +11,8 @@ use Infocyph\AuthLayer\Contract\Id\AuthIdGeneratorInterface;
 use Infocyph\AuthLayer\Contract\Security\AccessTokenServiceInterface;
 use Infocyph\AuthLayer\Contract\Storage\AuditEventStoreInterface;
 use Infocyph\AuthLayer\Contract\Storage\RefreshTokenStoreInterface;
+use Infocyph\AuthLayer\Support\AuthEventRecorder;
+use Infocyph\AuthLayer\Support\ContextValue;
 use Infocyph\AuthLayer\Support\SystemClock;
 
 final readonly class TokenAuthManager
@@ -24,8 +25,7 @@ final readonly class TokenAuthManager
         private AuthIdGeneratorInterface $ids,
         private int $refreshTtlSeconds = 1209600,
         private ClockInterface $clock = new SystemClock(),
-    ) {
-    }
+    ) {}
 
     /**
      * @param array<string, mixed> $context
@@ -36,22 +36,6 @@ final readonly class TokenAuthManager
         $this->record(AuthEventType::ACCESS_TOKEN_ISSUED, $claims->subjectId, $claims->metadata + $context);
 
         return new TokenAuthResult(TokenType::ACCESS, token: $token, code: 'access_token_issued', context: $context);
-    }
-
-    /**
-     * @param array<string, mixed> $context
-     */
-    public function verifyAccessToken(string $token, array $context = []): TokenAuthResult
-    {
-        $verification = $this->accessTokens->verify($token);
-
-        return new TokenAuthResult(
-            TokenType::ACCESS,
-            token: $token,
-            verification: $verification,
-            code: $verification->verified ? 'access_token_verified' : ($verification->failureReason ?? 'access_token_invalid'),
-            context: $context,
-        );
     }
 
     /**
@@ -91,19 +75,23 @@ final readonly class TokenAuthManager
     }
 
     /**
-     * @param array<string, mixed> $metadata
+     * @param array<string, mixed> $context
      */
-    public function verifyRefreshToken(string $token, array $metadata = []): TokenAuthResult
+    public function revokeRefreshFamily(string $familyId, array $context = []): TokenRevocationResult
     {
-        $verification = $this->refreshTokenService->verify($token);
+        if ($this->refreshTokens->wasFamilyRevoked($familyId)) {
+            return new TokenRevocationResult(
+                TokenRevocationStatus::ALREADY_REVOKED,
+                $familyId,
+                'refresh_token_family_already_revoked',
+                $context,
+            );
+        }
 
-        return new TokenAuthResult(
-            TokenType::REFRESH,
-            token: $token,
-            verification: $verification,
-            code: $verification->verified ? 'refresh_token_verified' : ($verification->failureReason ?? 'refresh_token_invalid'),
-            context: $metadata,
-        );
+        $this->refreshTokens->revokeFamily($familyId);
+        $this->record(AuthEventType::REFRESH_TOKEN_REVOKED, ContextValue::stringOrNull($context, 'account_id'), ['family_id' => $familyId] + $context, AuthEventSeverity::NOTICE);
+
+        return new TokenRevocationResult(TokenRevocationStatus::REVOKED, $familyId, 'refresh_token_family_revoked', $context);
     }
 
     /**
@@ -117,7 +105,7 @@ final readonly class TokenAuthManager
             return new RefreshTokenRotationResult(false, record: $current, code: 'refresh_token_family_revoked', context: $metadata);
         }
 
-        if ($current->isExpiredAt($this->clock->now()) || $current->revokedAt !== null) {
+        if ($current->isExpiredAt($this->clock->now()) || $current->isRevoked()) {
             $this->refreshTokens->revokeFamily($current->familyId);
             $this->auditReuse($current, ['reason' => 'stale_token_reuse'] + $metadata);
 
@@ -158,16 +146,33 @@ final readonly class TokenAuthManager
     /**
      * @param array<string, mixed> $context
      */
-    public function revokeRefreshFamily(string $familyId, array $context = []): TokenRevocationResult
+    public function verifyAccessToken(string $token, array $context = []): TokenAuthResult
     {
-        if ($this->refreshTokens->wasFamilyRevoked($familyId)) {
-            return new TokenRevocationResult(TokenRevocationStatus::NOT_FOUND, $familyId, 'refresh_token_family_not_found', $context);
-        }
+        $verification = $this->accessTokens->verify($token);
 
-        $this->refreshTokens->revokeFamily($familyId);
-        $this->record(AuthEventType::REFRESH_TOKEN_REVOKED, $context['account_id'] ?? null, ['family_id' => $familyId] + $context, AuthEventSeverity::NOTICE);
+        return new TokenAuthResult(
+            TokenType::ACCESS,
+            token: $token,
+            verification: $verification,
+            code: $verification->verified ? 'access_token_verified' : ($verification->failureReason ?? 'access_token_invalid'),
+            context: $context,
+        );
+    }
 
-        return new TokenRevocationResult(TokenRevocationStatus::REVOKED, $familyId, 'refresh_token_family_revoked', $context);
+    /**
+     * @param array<string, mixed> $metadata
+     */
+    public function verifyRefreshToken(string $token, array $metadata = []): TokenAuthResult
+    {
+        $verification = $this->refreshTokenService->verify($token);
+
+        return new TokenAuthResult(
+            TokenType::REFRESH,
+            token: $token,
+            verification: $verification,
+            code: $verification->verified ? 'refresh_token_verified' : ($verification->failureReason ?? 'refresh_token_invalid'),
+            context: $metadata,
+        );
     }
 
     /**
@@ -194,17 +199,16 @@ final readonly class TokenAuthManager
         AuthEventSeverity $severity = AuthEventSeverity::INFO,
         ?string $deviceId = null,
     ): void {
-        $this->audit->record(new AuthEvent(
-            id: $this->ids->auditEventId(),
-            type: $type,
-            severity: $severity,
-            accountId: $accountId,
-            actorId: $accountId,
-            sessionId: $metadata['session_id'] ?? null,
-            deviceId: $deviceId ?? ($metadata['device_id'] ?? null),
-            correlationId: $this->ids->correlationId(),
-            occurredAt: $this->clock->now(),
+        AuthEventRecorder::record(
+            $this->audit,
+            $this->ids,
+            $this->clock,
+            $type,
+            $accountId,
             metadata: $metadata,
-        ));
+            severity: $severity,
+            deviceId: $deviceId ?? ContextValue::stringOrNull($metadata, 'device_id'),
+            sessionId: ContextValue::stringOrNull($metadata, 'session_id'),
+        );
     }
 }

@@ -4,28 +4,19 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Authentication\PasswordReset;
 
-final readonly class PasswordResetRequest
+use Infocyph\AuthLayer\Support\AbstractConsumableRequest;
+
+final readonly class PasswordResetRequest extends AbstractConsumableRequest
 {
-    /**
-     * @param array<string, mixed> $context
-     */
-    public function __construct(
-        public string $id,
-        public string $accountId,
-        public int $requestedAt,
-        public int $expiresAt,
-        public ?int $consumedAt = null,
-        public array $context = [],
-    ) {
-    }
-
-    public function isConsumed(): bool
+    public function withConsumedAt(int $consumedAt): self
     {
-        return $this->consumedAt !== null;
-    }
-
-    public function isExpiredAt(?int $timestamp = null): bool
-    {
-        return $this->expiresAt <= ($timestamp ?? time());
+        return new self(
+            id: $this->id,
+            accountId: $this->accountId,
+            requestedAt: $this->requestedAt,
+            expiresAt: $this->expiresAt,
+            consumedAt: $consumedAt,
+            context: $this->context,
+        );
     }
 }

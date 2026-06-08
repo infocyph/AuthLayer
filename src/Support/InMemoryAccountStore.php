@@ -18,11 +18,6 @@ final class InMemoryAccountStore implements AccountProviderInterface, AccountSto
      */
     private array $accounts = [];
 
-    public function save(AccountInterface $account): void
-    {
-        $this->accounts[$account->id()] = $account;
-    }
-
     public function findById(string $id): ?AccountInterface
     {
         return $this->accounts[$id] ?? null;
@@ -52,6 +47,17 @@ final class InMemoryAccountStore implements AccountProviderInterface, AccountSto
         $this->accounts[$accountId] = $updated;
     }
 
+    public function save(AccountInterface $account): void
+    {
+        $this->accounts[$account->id()] = $account;
+    }
+
+    public function updateMetadata(string $accountId, array $metadata): void
+    {
+        $account = $this->requireConcreteAccount($accountId);
+        $this->accounts[$accountId] = $account->withMetadata($metadata);
+    }
+
     public function updatePasswordHash(string $accountId, string $passwordHash): void
     {
         $account = $this->requireConcreteAccount($accountId);
@@ -64,29 +70,23 @@ final class InMemoryAccountStore implements AccountProviderInterface, AccountSto
         $this->accounts[$accountId] = $account->withStatus($status);
     }
 
-    public function updateMetadata(string $accountId, array $metadata): void
-    {
-        $account = $this->requireConcreteAccount($accountId);
-        $this->accounts[$accountId] = $account->withMetadata($metadata);
-    }
-
-    private function requireConcreteAccount(string $accountId): Account
-    {
-        $account = $this->requireAccount($accountId);
-
-        if (! $account instanceof Account) {
-            throw new StorageException(sprintf('Account "%s" must be an %s instance for in-memory mutation.', $accountId, Account::class));
-        }
-
-        return $account;
-    }
-
     private function requireAccount(string $accountId): AccountInterface
     {
         $account = $this->accounts[$accountId] ?? null;
 
         if ($account === null) {
             throw new StorageException(sprintf('Account "%s" was not found.', $accountId));
+        }
+
+        return $account;
+    }
+
+    private function requireConcreteAccount(string $accountId): Account
+    {
+        $account = $this->requireAccount($accountId);
+
+        if (!$account instanceof Account) {
+            throw new StorageException(sprintf('Account "%s" must be an %s instance for in-memory mutation.', $accountId, Account::class));
         }
 
         return $account;

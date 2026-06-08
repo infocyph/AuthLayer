@@ -6,7 +6,9 @@ namespace Infocyph\AuthLayer\Authorization\Scope;
 
 enum ScopeType: string
 {
-    case TENANT = 'tenant';
-    case WORKSPACE = 'workspace';
     case ORGANIZATION = 'organization';
+
+    case TENANT = 'tenant';
+
+    case WORKSPACE = 'workspace';
 }

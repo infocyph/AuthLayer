@@ -4,29 +4,63 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Authentication\RememberMe;
 
-final readonly class RememberTokenRecord
+use Infocyph\AuthLayer\Support\AbstractFamilyTokenRecord;
+
+final readonly class RememberTokenRecord extends AbstractFamilyTokenRecord
 {
     /**
      * @param array<string, mixed> $metadata
      */
     public function __construct(
-        public string $id,
-        public string $accountId,
         public string $deviceId,
         public string $selector,
         public string $verifierHash,
-        public string $familyId,
-        public int $issuedAt,
-        public int $expiresAt,
+        string $id,
+        string $accountId,
+        string $familyId,
+        int $issuedAt,
+        int $expiresAt,
         public ?int $lastUsedAt = null,
-        public ?int $rotatedAt = null,
-        public ?int $revokedAt = null,
-        public array $metadata = [],
+        ?int $rotatedAt = null,
+        ?int $revokedAt = null,
+        array $metadata = [],
     ) {
+        parent::__construct($id, $accountId, $familyId, $issuedAt, $expiresAt, $rotatedAt, $revokedAt, $metadata);
     }
 
-    public function isExpiredAt(?int $timestamp = null): bool
+    public function withLastUsedAt(int $lastUsedAt): self
     {
-        return $this->expiresAt <= ($timestamp ?? time());
+        return new self(
+            deviceId: $this->deviceId,
+            selector: $this->selector,
+            verifierHash: $this->verifierHash,
+            lastUsedAt: $lastUsedAt,
+            id: $this->id,
+            accountId: $this->accountId,
+            familyId: $this->familyId,
+            issuedAt: $this->issuedAt,
+            expiresAt: $this->expiresAt,
+            rotatedAt: $this->rotatedAt,
+            revokedAt: $this->revokedAt,
+            metadata: $this->metadata,
+        );
+    }
+
+    protected function recreate(?int $rotatedAt, ?int $revokedAt): static
+    {
+        return new self(
+            deviceId: $this->deviceId,
+            selector: $this->selector,
+            verifierHash: $this->verifierHash,
+            lastUsedAt: $this->lastUsedAt,
+            id: $this->id,
+            accountId: $this->accountId,
+            familyId: $this->familyId,
+            issuedAt: $this->issuedAt,
+            expiresAt: $this->expiresAt,
+            rotatedAt: $rotatedAt,
+            revokedAt: $revokedAt,
+            metadata: $this->metadata,
+        );
     }
 }

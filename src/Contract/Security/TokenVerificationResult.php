@@ -16,6 +16,5 @@ final readonly class TokenVerificationResult
         public array $claims = [],
         public ?int $expiresAt = null,
         public ?string $failureReason = null,
-    ) {
-    }
+    ) {}
 }

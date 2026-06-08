@@ -12,37 +12,51 @@ use Infocyph\AuthLayer\Principal\PrincipalInterface;
 
 final class Gate implements AuthorizerInterface
 {
-    /** @var array<string, callable> */
+    /** @var array<string, callable(PrincipalInterface, mixed, array<string, mixed>): (AuthorizationDecision|bool|null)> */
     private array $abilities = [];
 
-    /** @var list<callable> */
-    private array $beforeCallbacks = [];
-
-    /** @var list<callable> */
+    /** @var list<callable(PrincipalInterface, string, mixed, AuthorizationDecision, array<string, mixed>): (AuthorizationDecision|bool|null)> */
     private array $afterCallbacks = [];
+
+    /** @var list<callable(PrincipalInterface, string, mixed, array<string, mixed>): (AuthorizationDecision|bool|null)> */
+    private array $beforeCallbacks = [];
 
     public function __construct(
         private readonly ?PolicyResolverInterface $policyResolver = null,
-    ) {
-    }
+    ) {}
 
-    public function define(string $ability, callable $callback): self
-    {
-        $this->abilities[$ability] = $callback;
-
-        return $this;
-    }
-
-    public function before(callable $callback): self
-    {
-        $this->beforeCallbacks[] = $callback;
-
-        return $this;
-    }
-
+    /**
+     * @param callable(PrincipalInterface, string, mixed, AuthorizationDecision, array<string, mixed>): (AuthorizationDecision|bool|null) $callback
+     */
     public function after(callable $callback): self
     {
         $this->afterCallbacks[] = $callback;
+
+        return $this;
+    }
+
+    public function authorize(
+        PrincipalInterface $principal,
+        string $ability,
+        mixed $resource = null,
+        array $context = [],
+    ): void {
+        $decision = $this->can($principal, $ability, $resource, $context);
+
+        if (!$decision->allowed) {
+            throw new AuthorizationException(
+                $decision->reason ?? 'Authorization failed.',
+                $decision->code,
+            );
+        }
+    }
+
+    /**
+     * @param callable(PrincipalInterface, string, mixed, array<string, mixed>): (AuthorizationDecision|bool|null) $callback
+     */
+    public function before(callable $callback): self
+    {
+        $this->beforeCallbacks[] = $callback;
 
         return $this;
     }
@@ -56,15 +70,17 @@ final class Gate implements AuthorizerInterface
         foreach ($this->beforeCallbacks as $callback) {
             $result = $callback($principal, $ability, $resource, $context);
 
-            if ($result !== null) {
-                return $this->runAfterCallbacks(
-                    $principal,
-                    $ability,
-                    $resource,
-                    $context,
-                    $this->normalizeDecision($result),
-                );
+            if ($result === null) {
+                continue;
             }
+
+            return $this->runAfterCallbacks(
+                $principal,
+                $ability,
+                $resource,
+                $context,
+                $this->normalizeDecision($result),
+            );
         }
 
         $decision = $this->resolveDecision($principal, $ability, $resource, $context);
@@ -72,22 +88,28 @@ final class Gate implements AuthorizerInterface
         return $this->runAfterCallbacks($principal, $ability, $resource, $context, $decision);
     }
 
-    public function authorize(
-        PrincipalInterface $principal,
-        string $ability,
-        mixed $resource = null,
-        array $context = [],
-    ): void {
-        $decision = $this->can($principal, $ability, $resource, $context);
+    /**
+     * @param callable(PrincipalInterface, mixed, array<string, mixed>): (AuthorizationDecision|bool|null) $callback
+     */
+    public function define(string $ability, callable $callback): self
+    {
+        $this->abilities[$ability] = $callback;
 
-        if (! $decision->allowed) {
-            throw new AuthorizationException(
-                $decision->reason ?? 'Authorization failed.',
-                $decision->code,
-            );
-        }
+        return $this;
     }
 
+    private function normalizeDecision(AuthorizationDecision|bool|null $decision): AuthorizationDecision
+    {
+        return match (true) {
+            $decision instanceof AuthorizationDecision => $decision,
+            $decision === true => AuthorizationDecision::allow(),
+            default => AuthorizationDecision::deny(),
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
     private function resolveDecision(
         PrincipalInterface $principal,
         string $ability,
@@ -95,9 +117,9 @@ final class Gate implements AuthorizerInterface
         array $context,
     ): AuthorizationDecision {
         if (array_key_exists($ability, $this->abilities)) {
-            return $this->normalizeDecision(
-                ($this->abilities[$ability])($principal, $resource, $context),
-            );
+            $result = ($this->abilities[$ability])($principal, $resource, $context);
+
+            return $this->normalizeDecision($result);
         }
 
         $policy = $this->resolvePolicy($resource);
@@ -123,6 +145,9 @@ final class Gate implements AuthorizerInterface
         return $this->policyResolver->resolve($resource);
     }
 
+    /**
+     * @param array<string, mixed> $context
+     */
     private function runAfterCallbacks(
         PrincipalInterface $principal,
         string $ability,
@@ -133,20 +158,13 @@ final class Gate implements AuthorizerInterface
         foreach ($this->afterCallbacks as $callback) {
             $result = $callback($principal, $ability, $resource, $decision, $context);
 
-            if ($result !== null) {
-                $decision = $this->normalizeDecision($result);
+            if ($result === null) {
+                continue;
             }
+
+            $decision = $this->normalizeDecision($result);
         }
 
         return $decision;
-    }
-
-    private function normalizeDecision(AuthorizationDecision|bool|null $decision): AuthorizationDecision
-    {
-        return match (true) {
-            $decision instanceof AuthorizationDecision => $decision,
-            $decision === true => AuthorizationDecision::allow(),
-            default => AuthorizationDecision::deny(),
-        };
     }
 }

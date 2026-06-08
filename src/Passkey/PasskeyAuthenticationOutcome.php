@@ -15,6 +15,16 @@ final readonly class PasskeyAuthenticationOutcome
         public ?PasskeyVerificationResult $verification = null,
         public ?string $code = null,
         public array $context = [],
-    ) {
+    ) {}
+
+    public function failed(): bool
+    {
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        return $this->status === PasskeyAuthenticationStatus::STARTED
+            || $this->status === PasskeyAuthenticationStatus::VERIFIED;
     }
 }

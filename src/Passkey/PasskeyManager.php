@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Passkey;
 
-use Infocyph\AuthLayer\Audit\AuthEvent;
 use Infocyph\AuthLayer\Audit\AuthEventSeverity;
 use Infocyph\AuthLayer\Audit\AuthEventType;
 use Infocyph\AuthLayer\Contract\Clock\ClockInterface;
@@ -13,6 +12,8 @@ use Infocyph\AuthLayer\Contract\Notification\AuthNotifierInterface;
 use Infocyph\AuthLayer\Contract\Storage\AuditEventStoreInterface;
 use Infocyph\AuthLayer\Notification\AuthNotification;
 use Infocyph\AuthLayer\Notification\AuthNotificationType;
+use Infocyph\AuthLayer\Support\AuthEventRecorder;
+use Infocyph\AuthLayer\Support\ContextValue;
 use Infocyph\AuthLayer\Support\SystemClock;
 
 final readonly class PasskeyManager
@@ -24,17 +25,29 @@ final readonly class PasskeyManager
         private AuthNotifierInterface $notifier,
         private AuthIdGeneratorInterface $ids,
         private ClockInterface $clock = new SystemClock(),
-    ) {
-    }
+    ) {}
 
     /**
      * @param array<string, mixed> $context
      */
-    public function startRegistration(string $accountId, array $context = []): PasskeyRegistrationOutcome
+    public function finishAuthentication(PasskeyAuthenticationResult $result, array $context = []): PasskeyAuthenticationOutcome
     {
-        $challenge = $this->service->startRegistration($accountId);
+        $verification = $this->service->finishAuthentication($result);
 
-        return new PasskeyRegistrationOutcome(PasskeyRegistrationStatus::STARTED, $challenge, code: 'passkey_registration_started', context: $context);
+        if ($verification->verified && $verification->accountId !== null) {
+            if ($verification->credentialId !== null && $verification->signCount !== null) {
+                $this->credentials->updateUsage($verification->credentialId, $verification->signCount, $this->clock->now());
+            }
+
+            $this->record(AuthEventType::PASSKEY_USED, $verification->accountId, ['credential_id' => $verification->credentialId] + $context);
+        }
+
+        return new PasskeyAuthenticationOutcome(
+            $verification->verified ? PasskeyAuthenticationStatus::VERIFIED : PasskeyAuthenticationStatus::INVALID,
+            verification: $verification,
+            code: $verification->verified ? 'passkey_verified' : ($verification->reason ?? 'passkey_invalid'),
+            context: $context,
+        );
     }
 
     /**
@@ -53,6 +66,16 @@ final readonly class PasskeyManager
     /**
      * @param array<string, mixed> $context
      */
+    public function revokeCredential(string $accountId, string $credentialId, array $context = []): void
+    {
+        $this->credentials->revoke($credentialId);
+        $this->record(AuthEventType::PASSKEY_REMOVED, $accountId, ['credential_id' => $credentialId] + $context, AuthEventSeverity::NOTICE);
+        $this->notifier->send(new AuthNotification(AuthNotificationType::PASSKEY_REMOVED, $accountId, ['credential_id' => $credentialId] + $context));
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
     public function startAuthentication(?string $accountId = null, array $context = []): PasskeyAuthenticationOutcome
     {
         $challenge = $this->service->startAuthentication($accountId);
@@ -63,49 +86,28 @@ final readonly class PasskeyManager
     /**
      * @param array<string, mixed> $context
      */
-    public function finishAuthentication(PasskeyAuthenticationResult $result, array $context = []): PasskeyAuthenticationOutcome
+    public function startRegistration(string $accountId, array $context = []): PasskeyRegistrationOutcome
     {
-        $verification = $this->service->finishAuthentication($result);
+        $challenge = $this->service->startRegistration($accountId);
 
-        if ($verification->verified && $verification->accountId !== null) {
-            if ($verification->credentialId !== null && $verification->signCount !== null) {
-                $this->credentials->updateSignCount($verification->credentialId, $verification->signCount);
-            }
-
-            $this->record(AuthEventType::PASSKEY_USED, $verification->accountId, ['credential_id' => $verification->credentialId] + $context);
-        }
-
-        return new PasskeyAuthenticationOutcome(
-            $verification->verified ? PasskeyAuthenticationStatus::VERIFIED : PasskeyAuthenticationStatus::INVALID,
-            verification: $verification,
-            code: $verification->verified ? 'passkey_verified' : ($verification->reason ?? 'passkey_invalid'),
-            context: $context,
-        );
+        return new PasskeyRegistrationOutcome(PasskeyRegistrationStatus::STARTED, $challenge, code: 'passkey_registration_started', context: $context);
     }
 
     /**
-     * @param array<string, mixed> $context
+     * @param array<string, mixed> $metadata
      */
-    public function revokeCredential(string $accountId, string $credentialId, array $context = []): void
-    {
-        $this->credentials->revoke($credentialId);
-        $this->record(AuthEventType::PASSKEY_REMOVED, $accountId, ['credential_id' => $credentialId] + $context, AuthEventSeverity::NOTICE);
-        $this->notifier->send(new AuthNotification(AuthNotificationType::PASSKEY_REMOVED, $accountId, ['credential_id' => $credentialId] + $context));
-    }
-
     private function record(AuthEventType $type, string $accountId, array $metadata = [], AuthEventSeverity $severity = AuthEventSeverity::INFO): void
     {
-        $this->audit->record(new AuthEvent(
-            id: $this->ids->auditEventId(),
-            type: $type,
-            severity: $severity,
-            accountId: $accountId,
-            actorId: $accountId,
-            sessionId: $metadata['session_id'] ?? null,
-            deviceId: $metadata['device_id'] ?? null,
-            correlationId: $this->ids->correlationId(),
-            occurredAt: $this->clock->now(),
+        AuthEventRecorder::record(
+            $this->audit,
+            $this->ids,
+            $this->clock,
+            $type,
+            $accountId,
             metadata: $metadata,
-        ));
+            severity: $severity,
+            sessionId: ContextValue::stringOrNull($metadata, 'session_id'),
+            deviceId: ContextValue::stringOrNull($metadata, 'device_id'),
+        );
     }
 }

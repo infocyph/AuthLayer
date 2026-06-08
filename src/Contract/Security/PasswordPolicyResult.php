@@ -13,6 +13,5 @@ final readonly class PasswordPolicyResult
         public bool $valid,
         public array $violations = [],
         public ?string $code = null,
-    ) {
-    }
+    ) {}
 }

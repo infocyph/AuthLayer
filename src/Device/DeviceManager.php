@@ -14,7 +14,14 @@ final readonly class DeviceManager
         private DeviceStoreInterface $devices,
         private AuthIdGeneratorInterface $ids,
         private ClockInterface $clock = new SystemClock(),
-    ) {
+    ) {}
+
+    /**
+     * @return list<DeviceRecord>
+     */
+    public function listForAccount(string $accountId): array
+    {
+        return $this->devices->findForAccount($accountId);
     }
 
     /**
@@ -37,19 +44,6 @@ final readonly class DeviceManager
         return new DeviceResult(DeviceStatus::REGISTERED, device: $device, code: 'device_registered', context: $metadata);
     }
 
-    public function trust(string $deviceId): DeviceResult
-    {
-        $device = $this->devices->find($deviceId);
-
-        if ($device === null) {
-            return new DeviceResult(DeviceStatus::NOT_FOUND, code: 'device_not_found');
-        }
-
-        $this->devices->markTrusted($deviceId, true);
-
-        return new DeviceResult(DeviceStatus::TRUSTED, device: $this->devices->find($deviceId), code: 'device_trusted');
-    }
-
     public function revoke(string $deviceId): DeviceResult
     {
         $device = $this->devices->find($deviceId);
@@ -63,14 +57,6 @@ final readonly class DeviceManager
         return new DeviceResult(DeviceStatus::REVOKED, device: $device, code: 'device_revoked');
     }
 
-    /**
-     * @return list<DeviceRecord>
-     */
-    public function listForAccount(string $accountId): array
-    {
-        return $this->devices->findForAccount($accountId);
-    }
-
     public function touch(string $deviceId, ?int $seenAt = null): DeviceResult
     {
         $device = $this->devices->find($deviceId);
@@ -82,5 +68,18 @@ final readonly class DeviceManager
         $this->devices->touch($deviceId, $seenAt ?? $this->clock->now());
 
         return new DeviceResult(DeviceStatus::TOUCHED, device: $this->devices->find($deviceId), code: 'device_touched');
+    }
+
+    public function trust(string $deviceId): DeviceResult
+    {
+        $device = $this->devices->find($deviceId);
+
+        if ($device === null) {
+            return new DeviceResult(DeviceStatus::NOT_FOUND, code: 'device_not_found');
+        }
+
+        $this->devices->markTrusted($deviceId, true);
+
+        return new DeviceResult(DeviceStatus::TRUSTED, device: $this->devices->find($deviceId), code: 'device_trusted');
     }
 }

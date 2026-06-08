@@ -16,6 +16,15 @@ final readonly class ImpersonationResult
         public ?ImpersonationSession $session = null,
         public ?string $code = null,
         public array $context = [],
-    ) {
+    ) {}
+
+    public function failed(): bool
+    {
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        return $this->principal !== null && $this->session !== null;
     }
 }

@@ -1,11 +1,25 @@
 {
   "name": "infocyph/auth-layer",
   "description": "Framework-agnostic authentication and authorization core for PHP.",
-  "type": "library",
   "license": "MIT",
+  "type": "library",
   "require": {
     "php": ">=8.4"
   },
+  "require-dev": {
+    "infocyph/phpforge": "dev-main"
+  },
+  "suggest": {
+    "infocyph/cachelayer": "Cache/counter/TTL implementation through bridge.",
+    "infocyph/dblayer": "Durable persistence implementation through bridge.",
+    "infocyph/epicrypt": "Security/token/password implementation through bridge.",
+    "infocyph/otp": "MFA/OTP implementation through bridge.",
+    "infocyph/talkingbytes": "Notification delivery through bridge.",
+    "infocyph/uid": "Identifier generation through bridge.",
+    "infocyph/webrick": "HTTP middleware integration through bridge."
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true,
   "autoload": {
     "psr-4": {
       "Infocyph\\AuthLayer\\": "src/"
@@ -16,27 +30,13 @@
       "Infocyph\\AuthLayer\\Tests\\": "tests/"
     }
   },
-  "require-dev": {
-    "pestphp/pest": "^4.0",
-    "phpstan/phpstan": "^2.0",
-    "vimeo/psalm": "^6.0",
-    "laravel/pint": "^1.0",
-    "rector/rector": "^2.0",
-    "phpbench/phpbench": "^1.0"
-  },
-  "suggest": {
-    "infocyph/epicrypt": "Security/token/password implementation through bridge.",
-    "infocyph/otp": "MFA/OTP implementation through bridge.",
-    "infocyph/uid": "Identifier generation through bridge.",
-    "infocyph/dblayer": "Durable persistence implementation through bridge.",
-    "infocyph/cachelayer": "Cache/counter/TTL implementation through bridge.",
-    "infocyph/talkingbytes": "Notification delivery through bridge.",
-    "infocyph/webrick": "HTTP middleware integration through bridge."
-  },
-  "minimum-stability": "stable",
-  "prefer-stable": true,
   "config": {
-    "sort-packages": true,
-    "optimize-autoloader": true
+    "allow-plugins": {
+      "ergebnis/composer-normalize": true,
+      "infocyph/phpforge": true,
+      "pestphp/pest-plugin": true
+    },
+    "optimize-autoloader": true,
+    "sort-packages": true
   }
 }

@@ -9,7 +9,5 @@ use Infocyph\AuthLayer\Notification\AuthNotification;
 
 final class NullAuthNotifier implements AuthNotifierInterface
 {
-    public function send(AuthNotification $notification): void
-    {
-    }
+    public function send(AuthNotification $notification): void {}
 }

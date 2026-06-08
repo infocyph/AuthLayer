@@ -14,6 +14,18 @@ final readonly class TokenRevocationResult
         public string $familyId,
         public ?string $code = null,
         public array $context = [],
-    ) {
+    ) {}
+
+    public function failed(): bool
+    {
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        return match ($this->status) {
+            TokenRevocationStatus::REVOKED,
+            TokenRevocationStatus::ALREADY_REVOKED => true,
+        };
     }
 }

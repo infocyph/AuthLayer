@@ -15,8 +15,7 @@ final readonly class Account implements AccountInterface
         private AccountStatus $status = AccountStatus::ACTIVE,
         private ?string $passwordHash = null,
         private array $metadata = [],
-    ) {
-    }
+    ) {}
 
     public function id(): string
     {
@@ -28,9 +27,9 @@ final readonly class Account implements AccountInterface
         return $this->identifier;
     }
 
-    public function status(): AccountStatus
+    public function metadata(): array
     {
-        return $this->status;
+        return $this->metadata;
     }
 
     public function passwordHash(): ?string
@@ -38,19 +37,22 @@ final readonly class Account implements AccountInterface
         return $this->passwordHash;
     }
 
-    public function metadata(): array
+    public function status(): AccountStatus
     {
-        return $this->metadata;
+        return $this->status;
     }
 
-    public function withStatus(AccountStatus $status): self
+    /**
+     * @param array<string, mixed> $metadata
+     */
+    public function withMetadata(array $metadata): self
     {
         return new self(
             id: $this->id,
             identifier: $this->identifier,
-            status: $status,
+            status: $this->status,
             passwordHash: $this->passwordHash,
-            metadata: $this->metadata,
+            metadata: $metadata,
         );
     }
 
@@ -65,17 +67,14 @@ final readonly class Account implements AccountInterface
         );
     }
 
-    /**
-     * @param array<string, mixed> $metadata
-     */
-    public function withMetadata(array $metadata): self
+    public function withStatus(AccountStatus $status): self
     {
         return new self(
             id: $this->id,
             identifier: $this->identifier,
-            status: $this->status,
+            status: $status,
             passwordHash: $this->passwordHash,
-            metadata: $metadata,
+            metadata: $this->metadata,
         );
     }
 }

@@ -12,28 +12,11 @@ final readonly class PermissionManager
         private PermissionStoreInterface $permissions,
         private PermissionAssignmentStoreInterface $assignments,
         private AuthIdGeneratorInterface $ids,
-    ) {
-    }
-
-    /**
-     * @param array<string, mixed> $metadata
-     */
-    public function create(string $name, array $metadata = []): Permission
-    {
-        $permission = new Permission($this->ids->permissionId(), $name, $metadata);
-        $this->assignments->save($permission);
-
-        return $permission;
-    }
+    ) {}
 
     public function assignToAccount(string $accountId, string $permissionId): void
     {
         $this->assignments->assignPermissionToAccount($accountId, $permissionId);
-    }
-
-    public function revokeFromAccount(string $accountId, string $permissionId): void
-    {
-        $this->assignments->revokePermissionFromAccount($accountId, $permissionId);
     }
 
     public function assignToRole(string $roleId, string $permissionId): void
@@ -41,9 +24,19 @@ final readonly class PermissionManager
         $this->assignments->assignPermissionToRole($roleId, $permissionId);
     }
 
-    public function revokeFromRole(string $roleId, string $permissionId): void
+    /**
+     * @param array<string, mixed> $metadata
+     */
+    public function create(string $name, array $metadata = []): Permission
     {
-        $this->assignments->revokePermissionFromRole($roleId, $permissionId);
+        $permission = new Permission(
+            id: $this->ids->permissionId(),
+            name: $name,
+            metadata: $metadata,
+        );
+        $this->assignments->save($permission);
+
+        return $permission;
     }
 
     /**
@@ -52,5 +45,24 @@ final readonly class PermissionManager
     public function forAccount(string $accountId): array
     {
         return $this->permissions->permissionsForAccount($accountId);
+    }
+
+    /**
+     * @param list<string> $roleIds
+     * @return list<Permission>
+     */
+    public function forRoles(array $roleIds): array
+    {
+        return $this->permissions->permissionsForRoles($roleIds);
+    }
+
+    public function revokeFromAccount(string $accountId, string $permissionId): void
+    {
+        $this->assignments->revokePermissionFromAccount($accountId, $permissionId);
+    }
+
+    public function revokeFromRole(string $roleId, string $permissionId): void
+    {
+        $this->assignments->revokePermissionFromRole($roleId, $permissionId);
     }
 }

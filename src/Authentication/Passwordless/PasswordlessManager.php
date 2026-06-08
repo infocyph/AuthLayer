@@ -13,8 +13,7 @@ final readonly class PasswordlessManager
     public function __construct(
         private PasswordlessTokenServiceInterface $tokens,
         private AuthNotifierInterface $notifier,
-    ) {
-    }
+    ) {}
 
     /**
      * @param array<string, mixed> $context

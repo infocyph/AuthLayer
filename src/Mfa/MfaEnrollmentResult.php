@@ -16,6 +16,17 @@ final readonly class MfaEnrollmentResult
         public array $recoveryCodes = [],
         public ?string $code = null,
         public array $context = [],
-    ) {
+    ) {}
+
+    public function failed(): bool
+    {
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        return $this->status === MfaStatus::ENROLLED
+            || $this->status === MfaStatus::ACTIVATED
+            || $this->status === MfaStatus::REMOVED;
     }
 }

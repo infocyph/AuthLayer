@@ -8,9 +8,7 @@ use Infocyph\AuthLayer\Contract\Cache\TtlStoreInterface;
 
 final class NullTtlStore implements TtlStoreInterface
 {
-    public function put(string $key, mixed $value, int $ttlSeconds): void
-    {
-    }
+    public function delete(string $key): void {}
 
     public function get(string $key, mixed $default = null): mixed
     {
@@ -22,7 +20,5 @@ final class NullTtlStore implements TtlStoreInterface
         return $default;
     }
 
-    public function delete(string $key): void
-    {
-    }
+    public function put(string $key, mixed $value, int $ttlSeconds): void {}
 }

@@ -7,6 +7,8 @@ namespace Infocyph\AuthLayer\Authorization\Grant;
 enum DelegationStatus: string
 {
     case GRANTED = 'granted';
-    case REVOKED = 'revoked';
+
     case LISTED = 'listed';
+
+    case REVOKED = 'revoked';
 }

@@ -12,20 +12,20 @@ interface AuthorizerInterface
     /**
      * @param array<string, mixed> $context
      */
-    public function can(
-        PrincipalInterface $principal,
-        string $ability,
-        mixed $resource = null,
-        array $context = [],
-    ): AuthorizationDecision;
-
-    /**
-     * @param array<string, mixed> $context
-     */
     public function authorize(
         PrincipalInterface $principal,
         string $ability,
         mixed $resource = null,
         array $context = [],
     ): void;
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    public function can(
+        PrincipalInterface $principal,
+        string $ability,
+        mixed $resource = null,
+        array $context = [],
+    ): AuthorizationDecision;
 }

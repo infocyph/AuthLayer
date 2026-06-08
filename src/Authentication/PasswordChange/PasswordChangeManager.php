@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Authentication\PasswordChange;
 
-use Infocyph\AuthLayer\Audit\AuthEvent;
 use Infocyph\AuthLayer\Audit\AuthEventSeverity;
 use Infocyph\AuthLayer\Audit\AuthEventType;
 use Infocyph\AuthLayer\Contract\Clock\ClockInterface;
@@ -18,6 +17,8 @@ use Infocyph\AuthLayer\Contract\Storage\AccountStoreInterface;
 use Infocyph\AuthLayer\Contract\Storage\AuditEventStoreInterface;
 use Infocyph\AuthLayer\Notification\AuthNotification;
 use Infocyph\AuthLayer\Notification\AuthNotificationType;
+use Infocyph\AuthLayer\Support\AuthEventRecorder;
+use Infocyph\AuthLayer\Support\ContextValue;
 use Infocyph\AuthLayer\Support\SystemClock;
 
 final readonly class PasswordChangeManager
@@ -30,8 +31,7 @@ final readonly class PasswordChangeManager
         private AuthNotifierInterface $notifier,
         private AuthIdGeneratorInterface $ids,
         private ClockInterface $clock = new SystemClock(),
-    ) {
-    }
+    ) {}
 
     /**
      * @param array<string, mixed> $context
@@ -46,23 +46,22 @@ final readonly class PasswordChangeManager
 
         $verification = $this->passwords->verify($currentPassword, $account->passwordHash());
 
-        if (! $verification->verified) {
+        if (!$verification->verified) {
             return new PasswordChangeResult(PasswordChangeStatus::INVALID_CREDENTIALS, 'invalid_credentials', $context);
         }
 
         $this->accountStore->updatePasswordHash($accountId, $newPasswordHash);
-        $this->audit->record(new AuthEvent(
-            id: $this->ids->auditEventId(),
-            type: AuthEventType::PASSWORD_CHANGED,
-            severity: AuthEventSeverity::NOTICE,
-            accountId: $accountId,
-            actorId: $accountId,
-            sessionId: $context['session_id'] ?? null,
-            deviceId: $context['device_id'] ?? null,
-            correlationId: $this->ids->correlationId(),
-            occurredAt: $this->clock->now(),
+        AuthEventRecorder::record(
+            $this->audit,
+            $this->ids,
+            $this->clock,
+            AuthEventType::PASSWORD_CHANGED,
+            $accountId,
             metadata: $context,
-        ));
+            severity: AuthEventSeverity::NOTICE,
+            sessionId: ContextValue::stringOrNull($context, 'session_id'),
+            deviceId: ContextValue::stringOrNull($context, 'device_id'),
+        );
         $this->notifier->send(new AuthNotification(AuthNotificationType::PASSWORD_CHANGED, $accountId, $context));
 
         return new PasswordChangeResult(PasswordChangeStatus::CHANGED, 'password_changed', $context);
@@ -82,8 +81,12 @@ final readonly class PasswordChangeManager
         if ($policy !== null) {
             $policyResult = $policy->validate($newPlainPassword, $context);
 
-            if (! $policyResult->valid) {
-                return new PasswordChangeResult(PasswordChangeStatus::INVALID_CREDENTIALS, $policyResult->code ?? 'password_policy_failed', ['violations' => $policyResult->violations] + $context);
+            if (!$policyResult->valid) {
+                return new PasswordChangeResult(
+                    PasswordChangeStatus::POLICY_FAILED,
+                    $policyResult->code ?? 'password_policy_failed',
+                    ['violations' => $policyResult->violations] + $context,
+                );
             }
         }
 

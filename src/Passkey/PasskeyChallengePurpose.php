@@ -6,7 +6,9 @@ namespace Infocyph\AuthLayer\Passkey;
 
 enum PasskeyChallengePurpose: string
 {
-    case REGISTRATION = 'registration';
     case AUTHENTICATION = 'authentication';
+
+    case REGISTRATION = 'registration';
+
     case STEP_UP = 'step_up';
 }

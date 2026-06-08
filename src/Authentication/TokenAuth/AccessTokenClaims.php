@@ -17,6 +17,5 @@ final readonly class AccessTokenClaims
         public int $expiresAt,
         public array $scopes = [],
         public array $metadata = [],
-    ) {
-    }
+    ) {}
 }

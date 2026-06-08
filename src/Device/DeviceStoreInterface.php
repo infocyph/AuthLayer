@@ -6,8 +6,6 @@ namespace Infocyph\AuthLayer\Device;
 
 interface DeviceStoreInterface
 {
-    public function save(DeviceRecord $device): void;
-
     public function find(string $deviceId): ?DeviceRecord;
 
     /**
@@ -17,7 +15,9 @@ interface DeviceStoreInterface
 
     public function markTrusted(string $deviceId, bool $trusted): void;
 
-    public function touch(string $deviceId, int $lastSeenAt): void;
-
     public function revoke(string $deviceId): void;
+
+    public function save(DeviceRecord $device): void;
+
+    public function touch(string $deviceId, int $lastSeenAt): void;
 }

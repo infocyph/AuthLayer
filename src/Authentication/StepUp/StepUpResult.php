@@ -15,6 +15,15 @@ final readonly class StepUpResult
         public ?int $satisfiedAt = null,
         public ?string $code = null,
         public array $context = [],
-    ) {
+    ) {}
+
+    public function failed(): bool
+    {
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        return !$this->required;
     }
 }

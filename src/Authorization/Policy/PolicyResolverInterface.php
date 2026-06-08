@@ -6,5 +6,5 @@ namespace Infocyph\AuthLayer\Authorization\Policy;
 
 interface PolicyResolverInterface
 {
-    public function resolve(mixed $resource): PolicyInterface|null;
+    public function resolve(mixed $resource): ?PolicyInterface;
 }

@@ -19,6 +19,20 @@ final readonly class LockoutResult
         public ?int $attempts = null,
         public ?string $code = null,
         public array $context = [],
-    ) {
+    ) {}
+
+    public function failed(): bool
+    {
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        return match ($this->status) {
+            LockoutStatus::FAILURE_RECORDED,
+            LockoutStatus::LOCKED,
+            LockoutStatus::UNLOCKED,
+            LockoutStatus::CLEAR => true,
+        };
     }
 }

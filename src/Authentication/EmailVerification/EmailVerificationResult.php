@@ -15,7 +15,22 @@ final readonly class EmailVerificationResult
         public ?string $token = null,
         public ?string $code = null,
         public array $context = [],
-    ) {
+    ) {}
+
+    public function email(): ?string
+    {
+        return $this->request?->email;
+    }
+
+    public function failed(): bool
+    {
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        return $this->status === EmailVerificationStatus::ISSUED
+            || $this->status === EmailVerificationStatus::VERIFIED;
     }
 
     public function verified(): bool

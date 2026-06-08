@@ -10,6 +10,5 @@ final readonly class PasswordVerificationResult
         public bool $verified,
         public bool $needsRehash = false,
         public ?string $rehash = null,
-    ) {
-    }
+    ) {}
 }

@@ -6,9 +6,13 @@ namespace Infocyph\AuthLayer\Authentication\EmailVerification;
 
 enum EmailVerificationStatus: string
 {
-    case ISSUED = 'issued';
-    case VERIFIED = 'verified';
-    case INVALID = 'invalid';
-    case EXPIRED = 'expired';
     case CONSUMED = 'consumed';
+
+    case EXPIRED = 'expired';
+
+    case INVALID = 'invalid';
+
+    case ISSUED = 'issued';
+
+    case VERIFIED = 'verified';
 }

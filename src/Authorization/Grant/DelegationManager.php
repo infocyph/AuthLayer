@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Authorization\Grant;
 
-use Infocyph\AuthLayer\Audit\AuthEvent;
 use Infocyph\AuthLayer\Audit\AuthEventSeverity;
 use Infocyph\AuthLayer\Audit\AuthEventType;
 use Infocyph\AuthLayer\Contract\Clock\ClockInterface;
 use Infocyph\AuthLayer\Contract\Id\AuthIdGeneratorInterface;
 use Infocyph\AuthLayer\Contract\Storage\AuditEventStoreInterface;
+use Infocyph\AuthLayer\Support\AuthEventRecorder;
+use Infocyph\AuthLayer\Support\ContextValue;
 use Infocyph\AuthLayer\Support\SystemClock;
 
 final readonly class DelegationManager
@@ -19,8 +20,7 @@ final readonly class DelegationManager
         private AuditEventStoreInterface $audit,
         private AuthIdGeneratorInterface $ids,
         private ClockInterface $clock = new SystemClock(),
-    ) {
-    }
+    ) {}
 
     /**
      * @param array<string, mixed> $metadata
@@ -43,6 +43,11 @@ final readonly class DelegationManager
         return new DelegationResult(DelegationStatus::GRANTED, grant: $grant, code: 'delegated_access_granted', context: $metadata);
     }
 
+    public function listForPrincipal(string $principalId): DelegationResult
+    {
+        return new DelegationResult(DelegationStatus::LISTED, grants: $this->grants->grantsForPrincipal($principalId), code: 'delegated_access_listed');
+    }
+
     /**
      * @param array<string, mixed> $metadata
      */
@@ -54,27 +59,21 @@ final readonly class DelegationManager
         return new DelegationResult(DelegationStatus::REVOKED, code: 'delegated_access_revoked', context: $metadata);
     }
 
-    public function listForPrincipal(string $principalId): DelegationResult
-    {
-        return new DelegationResult(DelegationStatus::LISTED, grants: $this->grants->grantsForPrincipal($principalId), code: 'delegated_access_listed');
-    }
-
     /**
      * @param array<string, mixed> $metadata
      */
     private function recordAudit(AuthEventType $type, ?string $principalId, array $metadata): void
     {
-        $this->audit->record(new AuthEvent(
-            id: $this->ids->auditEventId(),
-            type: $type,
-            severity: AuthEventSeverity::NOTICE,
-            accountId: $principalId,
-            actorId: $principalId,
-            sessionId: $metadata['session_id'] ?? null,
-            deviceId: $metadata['device_id'] ?? null,
-            correlationId: $this->ids->correlationId(),
-            occurredAt: $this->clock->now(),
+        AuthEventRecorder::record(
+            $this->audit,
+            $this->ids,
+            $this->clock,
+            $type,
+            $principalId,
             metadata: $metadata,
-        ));
+            severity: AuthEventSeverity::NOTICE,
+            sessionId: ContextValue::stringOrNull($metadata, 'session_id'),
+            deviceId: ContextValue::stringOrNull($metadata, 'device_id'),
+        );
     }
 }

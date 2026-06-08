@@ -14,8 +14,7 @@ final readonly class Ability
         public ?string $resourceType = null,
         public ?string $resourceId = null,
         public array $context = [],
-    ) {
-    }
+    ) {}
 
     /**
      * @param array<string, mixed> $context

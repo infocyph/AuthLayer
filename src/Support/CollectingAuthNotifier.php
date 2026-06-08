@@ -14,9 +14,9 @@ final class CollectingAuthNotifier implements AuthNotifierInterface
      */
     private array $notifications = [];
 
-    public function send(AuthNotification $notification): void
+    public function flush(): void
     {
-        $this->notifications[] = $notification;
+        $this->notifications = [];
     }
 
     /**
@@ -27,8 +27,8 @@ final class CollectingAuthNotifier implements AuthNotifierInterface
         return $this->notifications;
     }
 
-    public function flush(): void
+    public function send(AuthNotification $notification): void
     {
-        $this->notifications = [];
+        $this->notifications[] = $notification;
     }
 }

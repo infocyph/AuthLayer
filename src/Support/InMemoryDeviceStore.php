@@ -17,13 +17,7 @@ final class InMemoryDeviceStore implements DeviceStoreInterface
 
     public function __construct(
         private readonly ClockInterface $clock = new SystemClock(),
-    ) {
-    }
-
-    public function save(DeviceRecord $device): void
-    {
-        $this->devices[$device->id] = $device;
-    }
+    ) {}
 
     public function find(string $deviceId): ?DeviceRecord
     {
@@ -34,7 +28,7 @@ final class InMemoryDeviceStore implements DeviceStoreInterface
     {
         return array_values(array_filter(
             $this->devices,
-            static fn (DeviceRecord $device): bool => $device->accountId === $accountId,
+            static fn(DeviceRecord $device): bool => $device->accountId === $accountId,
         ));
     }
 
@@ -61,17 +55,6 @@ final class InMemoryDeviceStore implements DeviceStoreInterface
             );
     }
 
-    public function touch(string $deviceId, int $lastSeenAt): void
-    {
-        $device = $this->devices[$deviceId] ?? null;
-
-        if ($device === null || $device->revokedAt !== null) {
-            return;
-        }
-
-        $this->devices[$deviceId] = $device->seenAt($lastSeenAt);
-    }
-
     public function revoke(string $deviceId): void
     {
         $device = $this->devices[$deviceId] ?? null;
@@ -81,5 +64,21 @@ final class InMemoryDeviceStore implements DeviceStoreInterface
         }
 
         $this->devices[$deviceId] = $device->revokedAt($this->clock->now());
+    }
+
+    public function save(DeviceRecord $device): void
+    {
+        $this->devices[$device->id] = $device;
+    }
+
+    public function touch(string $deviceId, int $lastSeenAt): void
+    {
+        $device = $this->devices[$deviceId] ?? null;
+
+        if ($device === null || $device->isRevoked()) {
+            return;
+        }
+
+        $this->devices[$deviceId] = $device->seenAt($lastSeenAt);
     }
 }

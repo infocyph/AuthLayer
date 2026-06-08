@@ -14,11 +14,6 @@ final class InMemoryAuditEventStore implements AuditEventStoreInterface
      */
     private array $events = [];
 
-    public function record(AuthEvent $event): void
-    {
-        $this->events[] = $event;
-    }
-
     /**
      * @return list<AuthEvent>
      */
@@ -30,5 +25,10 @@ final class InMemoryAuditEventStore implements AuditEventStoreInterface
     public function flush(): void
     {
         $this->events = [];
+    }
+
+    public function record(AuthEvent $event): void
+    {
+        $this->events[] = $event;
     }
 }

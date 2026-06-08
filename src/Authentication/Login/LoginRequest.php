@@ -14,6 +14,5 @@ final readonly class LoginRequest
         public string $password,
         public bool $rememberMe = false,
         public array $context = [],
-    ) {
-    }
+    ) {}
 }

@@ -16,6 +16,19 @@ final readonly class DelegationResult
         public array $grants = [],
         public ?string $code = null,
         public array $context = [],
-    ) {
+    ) {}
+
+    public function failed(): bool
+    {
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        return match ($this->status) {
+            DelegationStatus::GRANTED,
+            DelegationStatus::LISTED,
+            DelegationStatus::REVOKED => true,
+        };
     }
 }

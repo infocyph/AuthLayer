@@ -19,11 +19,20 @@ final readonly class LoginResult
         public ?string $code = null,
         public bool $rehashRecommended = false,
         public array $context = [],
-    ) {
-    }
+    ) {}
 
     public function authenticated(): bool
     {
         return $this->status === LoginStatus::AUTHENTICATED;
+    }
+
+    public function failed(): bool
+    {
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        return $this->authenticated();
     }
 }

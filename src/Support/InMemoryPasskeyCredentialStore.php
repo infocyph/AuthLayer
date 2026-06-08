@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Support;
 
+use Infocyph\AuthLayer\Contract\Clock\ClockInterface;
 use Infocyph\AuthLayer\Passkey\PasskeyCredential;
 use Infocyph\AuthLayer\Passkey\PasskeyCredentialStoreInterface;
 
@@ -14,15 +15,14 @@ final class InMemoryPasskeyCredentialStore implements PasskeyCredentialStoreInte
      */
     private array $credentials = [];
 
-    public function save(PasskeyCredential $credential): void
-    {
-        $this->credentials[$credential->id] = $credential;
-    }
+    public function __construct(
+        private readonly ClockInterface $clock = new SystemClock(),
+    ) {}
 
     public function findByCredentialId(string $credentialId): ?PasskeyCredential
     {
         foreach ($this->credentials as $credential) {
-            if ($credential->credentialId === $credentialId) {
+            if ($credential->credentialId === $credentialId && !$credential->isRevoked()) {
                 return $credential;
             }
         }
@@ -34,14 +34,28 @@ final class InMemoryPasskeyCredentialStore implements PasskeyCredentialStoreInte
     {
         return array_values(array_filter(
             $this->credentials,
-            static fn (PasskeyCredential $credential): bool => $credential->accountId === $accountId,
+            static fn(PasskeyCredential $credential): bool => $credential->accountId === $accountId && !$credential->isRevoked(),
         ));
     }
 
-    public function updateSignCount(string $credentialId, int $signCount): void
+    public function revoke(string $credentialId): void
     {
         foreach ($this->credentials as $id => $credential) {
-            if ($credential->credentialId !== $credentialId) {
+            if (($credential->credentialId === $credentialId || $credential->id === $credentialId) && !$credential->isRevoked()) {
+                $this->credentials[$id] = $credential->revokedAt($this->clock->now());
+            }
+        }
+    }
+
+    public function save(PasskeyCredential $credential): void
+    {
+        $this->credentials[$credential->id] = $credential;
+    }
+
+    public function updateUsage(string $credentialId, int $signCount, int $usedAt): void
+    {
+        foreach ($this->credentials as $id => $credential) {
+            if ($credential->credentialId !== $credentialId || $credential->isRevoked()) {
                 continue;
             }
 
@@ -53,18 +67,10 @@ final class InMemoryPasskeyCredentialStore implements PasskeyCredentialStoreInte
                 signCount: $signCount,
                 transports: $credential->transports,
                 createdAt: $credential->createdAt,
-                lastUsedAt: $credential->lastUsedAt,
+                lastUsedAt: $usedAt,
+                revokedAt: $credential->revokedAt,
                 metadata: $credential->metadata,
             );
-        }
-    }
-
-    public function revoke(string $credentialId): void
-    {
-        foreach ($this->credentials as $id => $credential) {
-            if ($credential->credentialId === $credentialId || $credential->id === $credentialId) {
-                unset($this->credentials[$id]);
-            }
         }
     }
 }

@@ -13,6 +13,5 @@ final readonly class Permission
         public string $id,
         public string $name,
         public array $metadata = [],
-    ) {
-    }
+    ) {}
 }

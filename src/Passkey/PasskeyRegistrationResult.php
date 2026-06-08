@@ -18,6 +18,5 @@ final readonly class PasskeyRegistrationResult
         public array $transports = [],
         public int $signCount = 0,
         public array $metadata = [],
-    ) {
-    }
+    ) {}
 }

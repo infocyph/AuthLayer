@@ -17,8 +17,7 @@ final readonly class MfaFactor
         public bool $enabled,
         public int $createdAt,
         public array $metadata = [],
-    ) {
-    }
+    ) {}
 
     public function activated(): self
     {

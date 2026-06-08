@@ -16,12 +16,17 @@ final readonly class AccessGrant
         public ?string $resourceType = null,
         public ?string $resourceId = null,
         public ?int $expiresAt = null,
+        public ?int $revokedAt = null,
         public array $metadata = [],
-    ) {
-    }
+    ) {}
 
     public function isExpiredAt(?int $timestamp = null): bool
     {
         return $this->expiresAt !== null && $this->expiresAt <= ($timestamp ?? time());
+    }
+
+    public function isRevoked(): bool
+    {
+        return $this->revokedAt !== null;
     }
 }

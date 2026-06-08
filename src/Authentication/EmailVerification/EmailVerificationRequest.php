@@ -4,29 +4,35 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Authentication\EmailVerification;
 
-final readonly class EmailVerificationRequest
+use Infocyph\AuthLayer\Support\AbstractConsumableRequest;
+
+final readonly class EmailVerificationRequest extends AbstractConsumableRequest
 {
     /**
      * @param array<string, mixed> $context
      */
     public function __construct(
-        public string $id,
-        public string $accountId,
+        string $id,
+        string $accountId,
         public string $email,
-        public int $requestedAt,
-        public int $expiresAt,
-        public ?int $consumedAt = null,
-        public array $context = [],
+        int $requestedAt,
+        int $expiresAt,
+        ?int $consumedAt = null,
+        array $context = [],
     ) {
+        parent::__construct($id, $accountId, $requestedAt, $expiresAt, $consumedAt, $context);
     }
 
-    public function isConsumed(): bool
+    public function withConsumedAt(int $consumedAt): self
     {
-        return $this->consumedAt !== null;
-    }
-
-    public function isExpiredAt(?int $timestamp = null): bool
-    {
-        return $this->expiresAt <= ($timestamp ?? time());
+        return new self(
+            email: $this->email,
+            id: $this->id,
+            accountId: $this->accountId,
+            requestedAt: $this->requestedAt,
+            expiresAt: $this->expiresAt,
+            consumedAt: $consumedAt,
+            context: $this->context,
+        );
     }
 }

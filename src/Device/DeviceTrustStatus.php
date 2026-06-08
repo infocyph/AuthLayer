@@ -6,7 +6,9 @@ namespace Infocyph\AuthLayer\Device;
 
 enum DeviceTrustStatus: string
 {
-    case TRUSTED = 'trusted';
-    case UNTRUSTED = 'untrusted';
     case REVOKED = 'revoked';
+
+    case TRUSTED = 'trusted';
+
+    case UNTRUSTED = 'untrusted';
 }

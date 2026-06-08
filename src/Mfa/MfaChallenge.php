@@ -17,8 +17,7 @@ final readonly class MfaChallenge
         public int $issuedAt,
         public int $expiresAt,
         public array $metadata = [],
-    ) {
-    }
+    ) {}
 
     public function isExpiredAt(?int $timestamp = null): bool
     {

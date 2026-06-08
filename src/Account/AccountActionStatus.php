@@ -6,8 +6,11 @@ namespace Infocyph\AuthLayer\Account;
 
 enum AccountActionStatus: string
 {
-    case CREATED = 'created';
-    case UPDATED = 'updated';
     case ALREADY_EXISTS = 'already_exists';
+
+    case CREATED = 'created';
+
     case NOT_FOUND = 'not_found';
+
+    case UPDATED = 'updated';
 }

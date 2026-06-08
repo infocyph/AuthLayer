@@ -15,11 +15,21 @@ final readonly class PasswordResetResult
         public ?string $token = null,
         public ?string $code = null,
         public array $context = [],
-    ) {
-    }
+    ) {}
 
     public function completed(): bool
     {
         return $this->status === PasswordResetStatus::COMPLETED;
+    }
+
+    public function failed(): bool
+    {
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        return $this->status === PasswordResetStatus::REQUESTED
+            || $this->status === PasswordResetStatus::COMPLETED;
     }
 }

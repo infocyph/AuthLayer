@@ -10,6 +10,5 @@ final readonly class StepUpRequirement
         public string $ability,
         public int $maxAgeSeconds = 900,
         public StepUpMethod $method = StepUpMethod::RECENT_AUTH,
-    ) {
-    }
+    ) {}
 }

@@ -6,9 +6,15 @@ namespace Infocyph\AuthLayer\Authentication\PasswordReset;
 
 enum PasswordResetStatus: string
 {
-    case REQUESTED = 'requested';
     case COMPLETED = 'completed';
-    case INVALID = 'invalid';
-    case EXPIRED = 'expired';
+
     case CONSUMED = 'consumed';
+
+    case EXPIRED = 'expired';
+
+    case INVALID = 'invalid';
+
+    case POLICY_FAILED = 'policy_failed';
+
+    case REQUESTED = 'requested';
 }

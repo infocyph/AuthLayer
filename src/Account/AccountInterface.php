@@ -10,12 +10,12 @@ interface AccountInterface
 
     public function identifier(): string;
 
-    public function status(): AccountStatus;
-
-    public function passwordHash(): ?string;
-
     /**
      * @return array<string, mixed>
      */
     public function metadata(): array;
+
+    public function passwordHash(): ?string;
+
+    public function status(): AccountStatus;
 }

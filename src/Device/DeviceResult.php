@@ -16,6 +16,18 @@ final readonly class DeviceResult
         public array $devices = [],
         public ?string $code = null,
         public array $context = [],
-    ) {
+    ) {}
+
+    public function failed(): bool
+    {
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        return $this->status === DeviceStatus::REGISTERED
+            || $this->status === DeviceStatus::TRUSTED
+            || $this->status === DeviceStatus::TOUCHED
+            || $this->status === DeviceStatus::REVOKED;
     }
 }

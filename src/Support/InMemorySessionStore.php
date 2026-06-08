@@ -24,23 +24,6 @@ final class InMemorySessionStore implements SessionStoreInterface
         return $this->sessions[$sessionId] ?? null;
     }
 
-    public function rotate(string $sessionId, AuthSession $replacement): void
-    {
-        unset($this->sessions[$sessionId]);
-        $this->sessions[$replacement->id] = $replacement;
-    }
-
-    public function touch(string $sessionId, int $lastSeenAt): void
-    {
-        $session = $this->sessions[$sessionId] ?? null;
-
-        if ($session === null) {
-            return;
-        }
-
-        $this->sessions[$sessionId] = $session->seenAt($lastSeenAt);
-    }
-
     public function revoke(string $sessionId): void
     {
         unset($this->sessions[$sessionId]);
@@ -59,5 +42,22 @@ final class InMemorySessionStore implements SessionStoreInterface
 
             unset($this->sessions[$sessionId]);
         }
+    }
+
+    public function rotate(string $sessionId, AuthSession $replacement): void
+    {
+        unset($this->sessions[$sessionId]);
+        $this->sessions[$replacement->id] = $replacement;
+    }
+
+    public function touch(string $sessionId, int $lastSeenAt): void
+    {
+        $session = $this->sessions[$sessionId] ?? null;
+
+        if ($session === null) {
+            return;
+        }
+
+        $this->sessions[$sessionId] = $session->seenAt($lastSeenAt);
     }
 }

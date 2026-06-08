@@ -14,21 +14,21 @@ final class InMemoryMfaFactorStore implements MfaFactorStoreInterface
      */
     private array $factors = [];
 
-    public function save(MfaFactor $factor): void
-    {
-        $this->factors[$factor->id] = $factor;
-    }
-
     public function findForAccount(string $accountId): array
     {
         return array_values(array_filter(
             $this->factors,
-            static fn (MfaFactor $factor): bool => $factor->accountId === $accountId,
+            static fn(MfaFactor $factor): bool => $factor->accountId === $accountId,
         ));
     }
 
     public function remove(string $factorId): void
     {
         unset($this->factors[$factorId]);
+    }
+
+    public function save(MfaFactor $factor): void
+    {
+        $this->factors[$factor->id] = $factor;
     }
 }

@@ -4,28 +4,43 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Authentication\TokenAuth;
 
-final readonly class RefreshTokenRecord
+use Infocyph\AuthLayer\Support\AbstractFamilyTokenRecord;
+
+final readonly class RefreshTokenRecord extends AbstractFamilyTokenRecord
 {
     /**
      * @param array<string, mixed> $metadata
      */
     public function __construct(
-        public string $id,
-        public string $accountId,
         public string $tokenHash,
-        public string $familyId,
         public ?string $clientId,
         public ?string $deviceId,
-        public int $issuedAt,
-        public int $expiresAt,
-        public ?int $rotatedAt = null,
-        public ?int $revokedAt = null,
-        public array $metadata = [],
+        string $id,
+        string $accountId,
+        string $familyId,
+        int $issuedAt,
+        int $expiresAt,
+        ?int $rotatedAt = null,
+        ?int $revokedAt = null,
+        array $metadata = [],
     ) {
+        parent::__construct($id, $accountId, $familyId, $issuedAt, $expiresAt, $rotatedAt, $revokedAt, $metadata);
     }
 
-    public function isExpiredAt(?int $timestamp = null): bool
+    protected function recreate(?int $rotatedAt, ?int $revokedAt): static
     {
-        return $this->expiresAt <= ($timestamp ?? time());
+        return new self(
+            tokenHash: $this->tokenHash,
+            clientId: $this->clientId,
+            deviceId: $this->deviceId,
+            id: $this->id,
+            accountId: $this->accountId,
+            familyId: $this->familyId,
+            issuedAt: $this->issuedAt,
+            expiresAt: $this->expiresAt,
+            rotatedAt: $rotatedAt,
+            revokedAt: $revokedAt,
+            metadata: $this->metadata,
+        );
     }
 }

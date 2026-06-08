@@ -10,19 +10,18 @@ final class FrozenClock implements ClockInterface
 {
     public function __construct(
         private int $now,
-    ) {
-    }
-
-    public function now(): int
-    {
-        return $this->now;
-    }
+    ) {}
 
     public function freezeAt(int $now): self
     {
         $this->now = $now;
 
         return $this;
+    }
+
+    public function now(): int
+    {
+        return $this->now;
     }
 
     public function tick(int $seconds = 1): self

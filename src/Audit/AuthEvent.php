@@ -20,6 +20,5 @@ final readonly class AuthEvent
         public string $correlationId,
         public int $occurredAt,
         public array $metadata = [],
-    ) {
-    }
+    ) {}
 }

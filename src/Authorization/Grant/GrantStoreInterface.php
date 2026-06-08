@@ -11,7 +11,7 @@ interface GrantStoreInterface
      */
     public function grantsForPrincipal(string $principalId): array;
 
-    public function save(AccessGrant $grant): void;
-
     public function revoke(string $grantId): void;
+
+    public function save(AccessGrant $grant): void;
 }

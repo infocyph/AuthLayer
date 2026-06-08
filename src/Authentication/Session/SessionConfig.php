@@ -9,6 +9,5 @@ final readonly class SessionConfig
     public function __construct(
         public int $absoluteTtlSeconds = 3600,
         public int $recentAuthWindowSeconds = 900,
-    ) {
-    }
+    ) {}
 }

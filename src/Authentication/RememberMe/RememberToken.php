@@ -12,6 +12,5 @@ final readonly class RememberToken
         public string $familyId,
         public string $verifierHash,
         public int $expiresAt,
-    ) {
-    }
+    ) {}
 }

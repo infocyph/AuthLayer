@@ -13,14 +13,9 @@ final class RandomAuthIdGenerator implements AuthIdGeneratorInterface
         return $this->generate('acct');
     }
 
-    public function sessionId(): string
+    public function auditEventId(): string
     {
-        return $this->generate('sess');
-    }
-
-    public function deviceId(): string
-    {
-        return $this->generate('dev');
+        return $this->generate('evt');
     }
 
     public function challengeId(): string
@@ -28,19 +23,19 @@ final class RandomAuthIdGenerator implements AuthIdGeneratorInterface
         return $this->generate('chl');
     }
 
+    public function correlationId(): string
+    {
+        return $this->generate('corr');
+    }
+
     public function credentialId(): string
     {
         return $this->generate('cred');
     }
 
-    public function roleId(): string
+    public function deviceId(): string
     {
-        return $this->generate('role');
-    }
-
-    public function permissionId(): string
-    {
-        return $this->generate('perm');
+        return $this->generate('dev');
     }
 
     public function grantId(): string
@@ -48,14 +43,19 @@ final class RandomAuthIdGenerator implements AuthIdGeneratorInterface
         return $this->generate('grant');
     }
 
-    public function auditEventId(): string
+    public function permissionId(): string
     {
-        return $this->generate('evt');
+        return $this->generate('perm');
     }
 
-    public function correlationId(): string
+    public function roleId(): string
     {
-        return $this->generate('corr');
+        return $this->generate('role');
+    }
+
+    public function sessionId(): string
+    {
+        return $this->generate('sess');
     }
 
     private function generate(string $prefix): string

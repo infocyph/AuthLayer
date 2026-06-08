@@ -17,8 +17,7 @@ final readonly class SessionManager
         private AuthIdGeneratorInterface $ids,
         private SessionConfig $config = new SessionConfig(),
         private ClockInterface $clock = new SystemClock(),
-    ) {
-    }
+    ) {}
 
     /**
      * @param array<string, mixed> $metadata
@@ -40,6 +39,26 @@ final readonly class SessionManager
         $this->sessions->create($session);
 
         return $session;
+    }
+
+    public function isExpired(AuthSession $session): bool
+    {
+        return $session->isExpiredAt($this->clock->now());
+    }
+
+    public function isRecentlyAuthenticated(AuthSession $session, int $windowSeconds): bool
+    {
+        return $session->recentAuthAt !== null && $session->recentAuthAt >= ($this->clock->now() - $windowSeconds);
+    }
+
+    public function revoke(string $sessionId): void
+    {
+        $this->sessions->revoke($sessionId);
+    }
+
+    public function revokeAllForAccount(string $accountId, ?string $exceptSessionId = null): void
+    {
+        $this->sessions->revokeAllForAccount($accountId, $exceptSessionId);
     }
 
     public function rotate(string $sessionId): AuthSession
@@ -67,6 +86,11 @@ final readonly class SessionManager
         return $replacement;
     }
 
+    public function status(AuthSession $session): SessionStatus
+    {
+        return $this->isExpired($session) ? SessionStatus::EXPIRED : SessionStatus::ACTIVE;
+    }
+
     public function touch(string $sessionId): ?AuthSession
     {
         $session = $this->sessions->find($sessionId);
@@ -79,30 +103,5 @@ final readonly class SessionManager
         $this->sessions->touch($sessionId, $now);
 
         return $session->seenAt($now);
-    }
-
-    public function revoke(string $sessionId): void
-    {
-        $this->sessions->revoke($sessionId);
-    }
-
-    public function revokeAllForAccount(string $accountId, ?string $exceptSessionId = null): void
-    {
-        $this->sessions->revokeAllForAccount($accountId, $exceptSessionId);
-    }
-
-    public function isExpired(AuthSession $session): bool
-    {
-        return $session->isExpiredAt($this->clock->now());
-    }
-
-    public function isRecentlyAuthenticated(AuthSession $session, int $windowSeconds): bool
-    {
-        return $session->recentAuthAt !== null && $session->recentAuthAt >= ($this->clock->now() - $windowSeconds);
-    }
-
-    public function status(AuthSession $session): SessionStatus
-    {
-        return $this->isExpired($session) ? SessionStatus::EXPIRED : SessionStatus::ACTIVE;
     }
 }

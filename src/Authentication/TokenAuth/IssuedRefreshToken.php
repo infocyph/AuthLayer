@@ -12,6 +12,5 @@ final readonly class IssuedRefreshToken
         public string $tokenId,
         public string $familyId,
         public int $expiresAt,
-    ) {
-    }
+    ) {}
 }

@@ -15,6 +15,5 @@ final readonly class MfaVerificationResult
         public bool $recoveryCodeUsed = false,
         public ?string $reason = null,
         public array $context = [],
-    ) {
-    }
+    ) {}
 }

@@ -6,8 +6,11 @@ namespace Infocyph\AuthLayer\Audit;
 
 enum AuthEventSeverity: string
 {
-    case INFO = 'info';
-    case NOTICE = 'notice';
-    case WARNING = 'warning';
     case CRITICAL = 'critical';
+
+    case INFO = 'info';
+
+    case NOTICE = 'notice';
+
+    case WARNING = 'warning';
 }
