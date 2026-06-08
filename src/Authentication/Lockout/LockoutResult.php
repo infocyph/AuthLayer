@@ -5,12 +5,9 @@ declare(strict_types=1);
 namespace Infocyph\AuthLayer\Authentication\Lockout;
 
 use Infocyph\AuthLayer\Contract\Storage\LockoutReason;
-use Infocyph\AuthLayer\Support\HasEnumStatusResult;
 
 final readonly class LockoutResult
 {
-    use HasEnumStatusResult;
-
     /**
      * @param array<string, mixed> $context
      */
@@ -24,16 +21,18 @@ final readonly class LockoutResult
         public array $context = [],
     ) {}
 
-    /**
-     * @return list<object>
-     */
-    protected function successStatuses(): array
+    public function failed(): bool
     {
-        return [
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        return match ($this->status) {
             LockoutStatus::FAILURE_RECORDED,
             LockoutStatus::LOCKED,
             LockoutStatus::UNLOCKED,
-            LockoutStatus::CLEAR,
-        ];
+            LockoutStatus::CLEAR => true,
+        };
     }
 }

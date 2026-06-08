@@ -4,12 +4,8 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Mfa;
 
-use Infocyph\AuthLayer\Support\HasEnumStatusResult;
-
 final readonly class MfaEnrollmentResult
 {
-    use HasEnumStatusResult;
-
     /**
      * @param list<string> $recoveryCodes
      * @param array<string, mixed> $context
@@ -22,11 +18,15 @@ final readonly class MfaEnrollmentResult
         public array $context = [],
     ) {}
 
-    /**
-     * @return list<object>
-     */
-    protected function successStatuses(): array
+    public function failed(): bool
     {
-        return [MfaStatus::ENROLLED, MfaStatus::ACTIVATED, MfaStatus::REMOVED];
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        return $this->status === MfaStatus::ENROLLED
+            || $this->status === MfaStatus::ACTIVATED
+            || $this->status === MfaStatus::REMOVED;
     }
 }

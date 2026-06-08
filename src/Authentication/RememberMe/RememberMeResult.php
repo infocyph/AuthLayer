@@ -4,13 +4,8 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Authentication\RememberMe;
 
-use Infocyph\AuthLayer\Support\AbstractCodeContextResult;
-use Infocyph\AuthLayer\Support\HasEnumStatusResult;
-
-final readonly class RememberMeResult extends AbstractCodeContextResult
+final readonly class RememberMeResult
 {
-    use HasEnumStatusResult;
-
     /**
      * @param array<string, mixed> $context
      */
@@ -18,27 +13,25 @@ final readonly class RememberMeResult extends AbstractCodeContextResult
         public RememberTokenStatus $status,
         public ?RememberToken $token = null,
         public ?RememberTokenRecord $record = null,
-        ?string $code = null,
-        array $context = [],
-    ) {
-        parent::__construct($code, $context);
+        public ?string $code = null,
+        public array $context = [],
+    ) {}
+
+    public function failed(): bool
+    {
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        return $this->status === RememberTokenStatus::ISSUED
+            || $this->status === RememberTokenStatus::ROTATED
+            || $this->status === RememberTokenStatus::VERIFIED
+            || $this->status === RememberTokenStatus::REVOKED;
     }
 
     public function verified(): bool
     {
         return $this->status === RememberTokenStatus::VERIFIED;
-    }
-
-    /**
-     * @return list<object>
-     */
-    protected function successStatuses(): array
-    {
-        return [
-            RememberTokenStatus::ISSUED,
-            RememberTokenStatus::ROTATED,
-            RememberTokenStatus::VERIFIED,
-            RememberTokenStatus::REVOKED,
-        ];
     }
 }

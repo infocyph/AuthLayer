@@ -4,12 +4,8 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Authentication\TokenAuth;
 
-use Infocyph\AuthLayer\Support\HasEnumStatusResult;
-
 final readonly class TokenRevocationResult
 {
-    use HasEnumStatusResult;
-
     /**
      * @param array<string, mixed> $context
      */
@@ -20,11 +16,16 @@ final readonly class TokenRevocationResult
         public array $context = [],
     ) {}
 
-    /**
-     * @return list<object>
-     */
-    protected function successStatuses(): array
+    public function failed(): bool
     {
-        return [TokenRevocationStatus::REVOKED, TokenRevocationStatus::ALREADY_REVOKED];
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        return match ($this->status) {
+            TokenRevocationStatus::REVOKED,
+            TokenRevocationStatus::ALREADY_REVOKED => true,
+        };
     }
 }

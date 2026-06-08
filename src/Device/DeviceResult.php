@@ -4,12 +4,8 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Device;
 
-use Infocyph\AuthLayer\Support\HasEnumStatusResult;
-
 final readonly class DeviceResult
 {
-    use HasEnumStatusResult;
-
     /**
      * @param list<DeviceRecord> $devices
      * @param array<string, mixed> $context
@@ -22,16 +18,16 @@ final readonly class DeviceResult
         public array $context = [],
     ) {}
 
-    /**
-     * @return list<object>
-     */
-    protected function successStatuses(): array
+    public function failed(): bool
     {
-        return [
-            DeviceStatus::REGISTERED,
-            DeviceStatus::TRUSTED,
-            DeviceStatus::TOUCHED,
-            DeviceStatus::REVOKED,
-        ];
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        return $this->status === DeviceStatus::REGISTERED
+            || $this->status === DeviceStatus::TRUSTED
+            || $this->status === DeviceStatus::TOUCHED
+            || $this->status === DeviceStatus::REVOKED;
     }
 }

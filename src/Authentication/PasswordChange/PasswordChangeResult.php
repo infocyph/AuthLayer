@@ -4,12 +4,8 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Authentication\PasswordChange;
 
-use Infocyph\AuthLayer\Support\HasEnumStatusResult;
-
 final readonly class PasswordChangeResult
 {
-    use HasEnumStatusResult;
-
     /**
      * @param array<string, mixed> $context
      */
@@ -19,11 +15,13 @@ final readonly class PasswordChangeResult
         public array $context = [],
     ) {}
 
-    /**
-     * @return list<object>
-     */
-    protected function successStatuses(): array
+    public function failed(): bool
     {
-        return [PasswordChangeStatus::CHANGED];
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        return $this->status === PasswordChangeStatus::CHANGED;
     }
 }

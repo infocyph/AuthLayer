@@ -6,52 +6,64 @@ namespace Infocyph\AuthLayer\Authentication\PasswordReset;
 
 use Infocyph\AuthLayer\Audit\AuthEventSeverity;
 use Infocyph\AuthLayer\Audit\AuthEventType;
-use Infocyph\AuthLayer\Authentication\Support\AbstractTokenRequestManager;
+use Infocyph\AuthLayer\Contract\Clock\ClockInterface;
+use Infocyph\AuthLayer\Contract\Id\AuthIdGeneratorInterface;
+use Infocyph\AuthLayer\Contract\Notification\AuthNotifierInterface;
 use Infocyph\AuthLayer\Contract\Security\PasswordHasherInterface;
 use Infocyph\AuthLayer\Contract\Security\PasswordPolicyInterface;
 use Infocyph\AuthLayer\Contract\Security\TokenVerificationResult;
+use Infocyph\AuthLayer\Contract\Storage\AccountStoreInterface;
+use Infocyph\AuthLayer\Contract\Storage\AuditEventStoreInterface;
 use Infocyph\AuthLayer\Contract\Storage\PasswordResetStoreInterface;
 use Infocyph\AuthLayer\Notification\AuthNotification;
 use Infocyph\AuthLayer\Notification\AuthNotificationType;
-use Infocyph\AuthLayer\Support\ConsumableTokenRequestProcessor;
+use Infocyph\AuthLayer\Support\AuthEventRecorder;
+use Infocyph\AuthLayer\Support\ContextValue;
+use Infocyph\AuthLayer\Support\SystemClock;
 
-final readonly class PasswordResetManager extends AbstractTokenRequestManager
+final readonly class PasswordResetManager
 {
     public function __construct(
         private PasswordResetTokenServiceInterface $tokens,
         private PasswordResetStoreInterface $store,
-        \Infocyph\AuthLayer\Contract\Storage\AccountStoreInterface $accounts,
-        \Infocyph\AuthLayer\Contract\Notification\AuthNotifierInterface $notifier,
-        \Infocyph\AuthLayer\Contract\Storage\AuditEventStoreInterface $audit,
-        \Infocyph\AuthLayer\Contract\Id\AuthIdGeneratorInterface $ids,
-        int $ttlSeconds = 3600,
-        \Infocyph\AuthLayer\Contract\Clock\ClockInterface $clock = new \Infocyph\AuthLayer\Support\SystemClock(),
-    ) {
-        parent::__construct($accounts, $notifier, $audit, $ids, $ttlSeconds, $clock);
-    }
+        private AccountStoreInterface $accounts,
+        private AuthNotifierInterface $notifier,
+        private AuditEventStoreInterface $audit,
+        private AuthIdGeneratorInterface $ids,
+        private int $ttlSeconds = 3600,
+        private ClockInterface $clock = new SystemClock(),
+    ) {}
 
     /**
      * @param array<string, mixed> $context
      */
     public function complete(string $token, string $passwordHash, array $context = []): PasswordResetResult
     {
-        return ConsumableTokenRequestProcessor::process(
-            verification: $this->tokens->verify($token),
-            resolveRequest: $this->resolveRequest(...),
-            invalidResult: static fn(string $reason): PasswordResetResult => new PasswordResetResult(PasswordResetStatus::INVALID, code: $reason, context: $context),
-            missingRequestResult: static fn(): PasswordResetResult => new PasswordResetResult(PasswordResetStatus::INVALID, code: 'reset_request_not_found', context: $context),
-            isConsumed: fn(PasswordResetRequest $request): bool => $request->isConsumed() || $this->store->wasConsumed($request->id),
-            consumedResult: static fn(PasswordResetRequest $request): PasswordResetResult => new PasswordResetResult(PasswordResetStatus::CONSUMED, $request, code: 'reset_request_consumed', context: $context),
-            isExpired: fn(PasswordResetRequest $request): bool => $request->isExpiredAt($this->clock->now()),
-            expiredResult: static fn(PasswordResetRequest $request): PasswordResetResult => new PasswordResetResult(PasswordResetStatus::EXPIRED, $request, code: 'reset_request_expired', context: $context),
-            successResult: function (PasswordResetRequest $request) use ($context, $passwordHash): PasswordResetResult {
-                $this->store->consume($request->id);
-                $this->accounts->updatePasswordHash($request->accountId, $passwordHash);
-                $this->recordEvent(AuthEventType::PASSWORD_RESET_COMPLETED, $request->accountId, $context, ['request_id' => $request->id], AuthEventSeverity::NOTICE);
+        $verification = $this->tokens->verify($token);
 
-                return new PasswordResetResult(PasswordResetStatus::COMPLETED, $request, code: 'password_reset_completed', context: $context);
-            },
-        );
+        if (!$verification->verified) {
+            return new PasswordResetResult(PasswordResetStatus::INVALID, code: $verification->failureReason ?? 'invalid_token', context: $context);
+        }
+
+        $request = $this->resolveRequest($verification);
+
+        if ($request === null) {
+            return new PasswordResetResult(PasswordResetStatus::INVALID, code: 'reset_request_not_found', context: $context);
+        }
+
+        if ($request->isConsumed() || $this->store->wasConsumed($request->id)) {
+            return new PasswordResetResult(PasswordResetStatus::CONSUMED, $request, code: 'reset_request_consumed', context: $context);
+        }
+
+        if ($request->isExpiredAt($this->clock->now())) {
+            return new PasswordResetResult(PasswordResetStatus::EXPIRED, $request, code: 'reset_request_expired', context: $context);
+        }
+
+        $this->store->consume($request->id);
+        $this->accounts->updatePasswordHash($request->accountId, $passwordHash);
+        $this->recordEvent(AuthEventType::PASSWORD_RESET_COMPLETED, $request->accountId, $context, ['request_id' => $request->id], AuthEventSeverity::NOTICE);
+
+        return new PasswordResetResult(PasswordResetStatus::COMPLETED, $request, code: 'password_reset_completed', context: $context);
     }
 
     /**
@@ -96,10 +108,38 @@ final readonly class PasswordResetManager extends AbstractTokenRequestManager
         return new PasswordResetResult(PasswordResetStatus::REQUESTED, $request, $token, 'password_reset_requested', $context);
     }
 
+    /**
+     * @param array<string, mixed> $context
+     * @param array<string, mixed> $metadata
+     */
+    private function recordEvent(
+        AuthEventType $type,
+        string $accountId,
+        array $context = [],
+        array $metadata = [],
+        AuthEventSeverity $severity = AuthEventSeverity::INFO,
+    ): void {
+        AuthEventRecorder::record(
+            $this->audit,
+            $this->ids,
+            $this->clock,
+            $type,
+            $accountId,
+            metadata: $metadata + $context,
+            severity: $severity,
+            sessionId: ContextValue::stringOrNull($context, 'session_id'),
+            deviceId: ContextValue::stringOrNull($context, 'device_id'),
+        );
+    }
+
     private function resolveRequest(TokenVerificationResult $verification): ?PasswordResetRequest
     {
-        $requestId = $this->resolveRequestId($verification);
+        $requestId = $verification->claims['request_id'] ?? $verification->tokenId;
 
-        return $requestId !== null ? $this->store->find($requestId) : null;
+        if (!is_string($requestId) || $requestId === '') {
+            return null;
+        }
+
+        return $this->store->find($requestId);
     }
 }

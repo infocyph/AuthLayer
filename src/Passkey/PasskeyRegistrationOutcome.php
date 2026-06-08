@@ -4,12 +4,8 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Passkey;
 
-use Infocyph\AuthLayer\Support\HasEnumStatusResult;
-
 final readonly class PasskeyRegistrationOutcome
 {
-    use HasEnumStatusResult;
-
     /**
      * @param array<string, mixed> $context
      */
@@ -21,11 +17,14 @@ final readonly class PasskeyRegistrationOutcome
         public array $context = [],
     ) {}
 
-    /**
-     * @return list<object>
-     */
-    protected function successStatuses(): array
+    public function failed(): bool
     {
-        return [PasskeyRegistrationStatus::STARTED, PasskeyRegistrationStatus::REGISTERED];
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        return $this->status === PasskeyRegistrationStatus::STARTED
+            || $this->status === PasskeyRegistrationStatus::REGISTERED;
     }
 }

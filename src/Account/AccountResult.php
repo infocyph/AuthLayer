@@ -4,12 +4,8 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Account;
 
-use Infocyph\AuthLayer\Support\HasEnumStatusResult;
-
 final readonly class AccountResult
 {
-    use HasEnumStatusResult;
-
     /**
      * @param array<string, mixed> $context
      */
@@ -20,11 +16,14 @@ final readonly class AccountResult
         public array $context = [],
     ) {}
 
-    /**
-     * @return list<object>
-     */
-    protected function successStatuses(): array
+    public function failed(): bool
     {
-        return [AccountActionStatus::CREATED, AccountActionStatus::UPDATED];
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        return $this->status === AccountActionStatus::CREATED
+            || $this->status === AccountActionStatus::UPDATED;
     }
 }

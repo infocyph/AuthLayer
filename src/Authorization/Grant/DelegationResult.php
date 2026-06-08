@@ -4,12 +4,8 @@ declare(strict_types=1);
 
 namespace Infocyph\AuthLayer\Authorization\Grant;
 
-use Infocyph\AuthLayer\Support\HasEnumStatusResult;
-
 final readonly class DelegationResult
 {
-    use HasEnumStatusResult;
-
     /**
      * @param list<AccessGrant> $grants
      * @param array<string, mixed> $context
@@ -22,11 +18,17 @@ final readonly class DelegationResult
         public array $context = [],
     ) {}
 
-    /**
-     * @return list<object>
-     */
-    protected function successStatuses(): array
+    public function failed(): bool
     {
-        return [DelegationStatus::GRANTED, DelegationStatus::LISTED, DelegationStatus::REVOKED];
+        return !$this->successful();
+    }
+
+    public function successful(): bool
+    {
+        return match ($this->status) {
+            DelegationStatus::GRANTED,
+            DelegationStatus::LISTED,
+            DelegationStatus::REVOKED => true,
+        };
     }
 }

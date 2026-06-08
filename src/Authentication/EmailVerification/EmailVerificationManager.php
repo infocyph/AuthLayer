@@ -6,29 +6,33 @@ namespace Infocyph\AuthLayer\Authentication\EmailVerification;
 
 use Infocyph\AuthLayer\Audit\AuthEventSeverity;
 use Infocyph\AuthLayer\Audit\AuthEventType;
-use Infocyph\AuthLayer\Authentication\Support\AbstractTokenRequestManager;
-use Infocyph\AuthLayer\Contract\Security\TokenVerificationResult as VerifiedToken;
-use Infocyph\AuthLayer\Contract\Storage\EmailVerificationStoreInterface as VerificationStore;
+use Infocyph\AuthLayer\Contract\Clock\ClockInterface;
+use Infocyph\AuthLayer\Contract\Id\AuthIdGeneratorInterface;
+use Infocyph\AuthLayer\Contract\Notification\AuthNotifierInterface;
+use Infocyph\AuthLayer\Contract\Security\TokenVerificationResult;
+use Infocyph\AuthLayer\Contract\Storage\AccountStoreInterface;
+use Infocyph\AuthLayer\Contract\Storage\AuditEventStoreInterface;
+use Infocyph\AuthLayer\Contract\Storage\EmailVerificationStoreInterface;
 use Infocyph\AuthLayer\Notification\AuthNotification;
 use Infocyph\AuthLayer\Notification\AuthNotificationType;
-use Infocyph\AuthLayer\Support\ConsumableTokenRequestProcessor;
+use Infocyph\AuthLayer\Support\AuthEventRecorder;
+use Infocyph\AuthLayer\Support\ContextValue;
+use Infocyph\AuthLayer\Support\SystemClock;
 
-final readonly class EmailVerificationManager extends AbstractTokenRequestManager
+final readonly class EmailVerificationManager
 {
     private const string REQUEST_CONTEXT_KEY = 'request_id';
 
     public function __construct(
         private EmailVerificationTokenServiceInterface $tokens,
-        private VerificationStore $store,
-        \Infocyph\AuthLayer\Contract\Storage\AccountStoreInterface $accounts,
-        \Infocyph\AuthLayer\Contract\Notification\AuthNotifierInterface $notifier,
-        \Infocyph\AuthLayer\Contract\Storage\AuditEventStoreInterface $audit,
-        \Infocyph\AuthLayer\Contract\Id\AuthIdGeneratorInterface $ids,
-        int $ttlSeconds = 3600,
-        \Infocyph\AuthLayer\Contract\Clock\ClockInterface $clock = new \Infocyph\AuthLayer\Support\SystemClock(),
-    ) {
-        parent::__construct($accounts, $notifier, $audit, $ids, $ttlSeconds, $clock);
-    }
+        private EmailVerificationStoreInterface $store,
+        private AccountStoreInterface $accounts,
+        private AuthNotifierInterface $notifier,
+        private AuditEventStoreInterface $audit,
+        private AuthIdGeneratorInterface $ids,
+        private int $ttlSeconds = 3600,
+        private ClockInterface $clock = new SystemClock(),
+    ) {}
 
     /**
      * @param array<string, mixed> $context
@@ -54,18 +58,27 @@ final readonly class EmailVerificationManager extends AbstractTokenRequestManage
     public function verify(string $token, array $context = []): EmailVerificationResult
     {
         $now = $this->clock->now();
+        $verification = $this->tokens->verify($token);
 
-        return ConsumableTokenRequestProcessor::process(
-            verification: $this->tokens->verify($token),
-            resolveRequest: $this->resolveRequest(...),
-            invalidResult: fn(string $reason): EmailVerificationResult => $this->invalidVerificationResult($reason, $context),
-            missingRequestResult: fn(): EmailVerificationResult => $this->missingVerificationResult($context),
-            isConsumed: static fn(EmailVerificationRequest $request): bool => $request->isConsumed(),
-            consumedResult: fn(EmailVerificationRequest $request): EmailVerificationResult => $this->consumedVerificationResult($request, $context),
-            isExpired: static fn(EmailVerificationRequest $request): bool => $request->isExpiredAt($now),
-            expiredResult: fn(EmailVerificationRequest $request): EmailVerificationResult => $this->expiredVerificationResult($request, $context),
-            successResult: fn(EmailVerificationRequest $request): EmailVerificationResult => $this->completeVerification($request, $context),
-        );
+        if (!$verification->verified) {
+            return $this->invalidVerificationResult($verification->failureReason ?? 'invalid_token', $context);
+        }
+
+        $request = $this->resolveRequest($verification);
+
+        if ($request === null) {
+            return $this->missingVerificationResult($context);
+        }
+
+        if ($request->isConsumed()) {
+            return $this->consumedVerificationResult($request, $context);
+        }
+
+        if ($request->isExpiredAt($now)) {
+            return $this->expiredVerificationResult($request, $context);
+        }
+
+        return $this->completeVerification($request, $context);
     }
 
     /**
@@ -118,10 +131,38 @@ final readonly class EmailVerificationManager extends AbstractTokenRequestManage
         return new EmailVerificationResult(EmailVerificationStatus::INVALID, code: 'verification_request_not_found', context: $context);
     }
 
-    private function resolveRequest(VerifiedToken $verification): ?EmailVerificationRequest
-    {
-        $requestId = $this->resolveRequestId($verification);
+    /**
+     * @param array<string, mixed> $context
+     * @param array<string, mixed> $metadata
+     */
+    private function recordEvent(
+        AuthEventType $type,
+        string $accountId,
+        array $context = [],
+        array $metadata = [],
+        AuthEventSeverity $severity = AuthEventSeverity::INFO,
+    ): void {
+        AuthEventRecorder::record(
+            $this->audit,
+            $this->ids,
+            $this->clock,
+            $type,
+            $accountId,
+            metadata: $metadata + $context,
+            severity: $severity,
+            sessionId: ContextValue::stringOrNull($context, 'session_id'),
+            deviceId: ContextValue::stringOrNull($context, 'device_id'),
+        );
+    }
 
-        return $requestId !== null ? $this->store->find($requestId) : null;
+    private function resolveRequest(TokenVerificationResult $verification): ?EmailVerificationRequest
+    {
+        $requestId = $verification->claims[self::REQUEST_CONTEXT_KEY] ?? $verification->tokenId;
+
+        if (!is_string($requestId) || $requestId === '') {
+            return null;
+        }
+
+        return $this->store->find($requestId);
     }
 }
